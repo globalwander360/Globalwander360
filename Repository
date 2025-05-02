@@ -306,3 +306,312 @@ export class RegisterComponent {
 }
 
 
+
+
+import { Component } from '@angular/core';
+import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { Router } from '@angular/router';
+import { AuthService } from '../services/auth.service';
+import { MessageService } from 'primeng/api';
+
+@Component({
+  selector: 'app-login',
+  templateUrl: './login.component.html',
+  styleUrls: ['./login.component.css']
+})
+export class LoginComponent {
+  loginForm: FormGroup;
+  submitted = false;
+
+  constructor(
+    private fb: FormBuilder,
+    private authService: AuthService,
+    private router: Router,
+    private messageService: MessageService
+  ) {
+    this.loginForm = this.fb.group({
+      email: ['', [Validators.required, Validators.email, Validators.pattern('^[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,4}$')]],
+      password: ['', Validators.required]
+    });
+  }
+
+  // Getter for easy access to form fields
+  get f() { return this.loginForm.controls; }
+
+  login() {
+    this.submitted = true;
+    
+    // Stop here if form is invalid
+    if (this.loginForm.invalid) {
+      if (this.f['email'].errors) {
+        if (this.f['email'].errors['required']) {
+          this.messageService.add({severity: 'error', summary: 'Error', detail: 'Email is required'});
+        } else if (this.f['email'].errors['email'] || this.f['email'].errors['pattern']) {
+          this.messageService.add({severity: 'error', summary: 'Error', detail: 'Email format is invalid'});
+        }
+      }
+      
+      if (this.f['password'].errors && this.f['password'].errors['required']) {
+        this.messageService.add({severity: 'error', summary: 'Error', detail: 'Password is required'});
+      }
+      
+      return;
+    }
+
+    this.authService.login(this.loginForm.value).subscribe({
+      next: (response) => {
+        const role = response.role;
+        localStorage.setItem('role', response.role);
+        localStorage.setItem('user', JSON.stringify(response));
+
+        this.messageService.add({severity: 'success', summary: 'Success', detail: 'Login successful!'});
+        
+        setTimeout(() => {
+          if (role === 'USER') {
+            this.router.navigate(['/user-dashboard']);
+          } else if (role === 'ADMIN') {
+            this.router.navigate(['/admin-dashboard']);
+          } else if (role === 'LOGISTIC_COORDINATOR') {
+            this.router.navigate(['/coordinator-dashboard']);
+          } else {
+            this.messageService.add({severity: 'warn', summary: 'Warning', detail: 'Unauthorized role'});
+          }
+        }, 1000);
+      },
+      error: (error) => {
+        this.messageService.add({
+          severity: 'error', 
+          summary: 'Login Failed', 
+          detail: error.message || 'Invalid credentials. Please try again.'
+        });
+      }
+    });
+  }
+
+  navigateTo(path: string): void {
+    this.router.navigate([path]);
+  }
+}
+
+
+<div class="login-container">
+  <div class="login-card">
+    <h2>Welcome Back</h2>
+    <p-toast></p-toast>
+    
+    <form [formGroup]="loginForm" (ngSubmit)="login()">
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input 
+          id="email"
+          type="text" 
+          formControlName="email" 
+          pInputText 
+          placeholder="Enter your email"
+          [ngClass]="{'ng-invalid ng-dirty': submitted && f['email'].errors}"
+        >
+        <small class="error-message" *ngIf="submitted && f['email'].errors">
+          <span *ngIf="f['email'].errors['required']">Email is required</span>
+          <span *ngIf="f['email'].errors['email'] || f['email'].errors['pattern']">Please enter a valid email address</span>
+        </small>
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <p-password 
+          id="password"
+          formControlName="password" 
+          [toggleMask]="true"
+          placeholder="Enter your password"
+          [ngClass]="{'ng-invalid ng-dirty': submitted && f['password'].errors}"
+          [feedback]="false"
+        ></p-password>
+        <small class="error-message" *ngIf="submitted && f['password'].errors && f['password'].errors['required']">
+          Password is required
+        </small>
+      </div>
+
+      <div class="forgot-password">
+        <a [routerLink]="['/forgot-password']">Forgot password?</a>
+      </div>
+
+      <div class="form-actions">
+        <button pButton type="submit" label="Login" icon="pi pi-sign-in" class="login-button"></button>
+      </div>
+      
+      <div class="register-redirect">
+        Don't have an account? <a [routerLink]="['/register']">Register now</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+/* Main Container Styles */
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background-color: #f8f9fa;
+  padding: 20px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 450px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  padding: 32px;
+  animation: fadeIn 0.5s ease;
+}
+
+/* Header Styles */
+.login-card h2 {
+  color: #333;
+  margin-bottom: 8px;
+  font-weight: 600;
+  text-align: center;
+  font-size: 1.8rem;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #3498db;
+  margin-bottom: 28px;
+}
+
+/* Form Styles */
+.form-group {
+  margin-bottom: 22px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #444;
+  font-size: 0.95rem;
+}
+
+/* Override PrimeNG Styles */
+:host ::ng-deep .p-inputtext,
+:host ::ng-deep .p-password,
+:host ::ng-deep .p-dropdown {
+  width: 100%;
+  padding: 12px;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+}
+
+:host ::ng-deep .p-inputtext:enabled:focus,
+:host ::ng-deep .p-dropdown:focus {
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.25);
+  border-color: #3498db;
+}
+
+:host ::ng-deep .p-password-input {
+  width: 100%;
+}
+
+/* Error Message Styles */
+.error-message {
+  color: #e74c3c;
+  font-size: 0.85rem;
+  display: block;
+  margin-top: 5px;
+  animation: fadeIn 0.3s ease;
+}
+
+:host ::ng-deep .ng-dirty.ng-invalid {
+  border-color: #e74c3c;
+}
+
+/* Forgot Password Link */
+.forgot-password {
+  text-align: right;
+  margin-top: -10px;
+  margin-bottom: 20px;
+}
+
+.forgot-password a {
+  color: #777;
+  font-size: 0.85rem;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.forgot-password a:hover {
+  color: #3498db;
+  text-decoration: underline;
+}
+
+/* Button Styles */
+.form-actions {
+  margin-top: 10px;
+}
+
+:host ::ng-deep .login-button {
+  width: 100%;
+  padding: 12px;
+  background-color: #3498db;
+  border-color: #3498db;
+  font-weight: 500;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+}
+
+:host ::ng-deep .login-button:hover {
+  background-color: #2980b9;
+  border-color: #2980b9;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+:host ::ng-deep .login-button:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+/* Register Redirect Link */
+.register-redirect {
+  text-align: center;
+  margin-top: 24px;
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.register-redirect a {
+  color: #3498db;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.register-redirect a:hover {
+  color: #2980b9;
+  text-decoration: underline;
+}
+
+/* Toast Message Override */
+:host ::ng-deep .p-toast .p-toast-message {
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Responsive adjustments */
+@media (max-width: 576px) {
+  .login-card {
+    padding: 24px 20px;
+  }
+  
+  .login-card h2 {
+    font-size: 1.5rem;
+  }
+}
+
