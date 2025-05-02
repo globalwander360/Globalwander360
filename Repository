@@ -1,0 +1,197 @@
+Here’s an updated and cleaner version of your HTML with:
+
+1. Proper labels above each input.
+
+
+2. The form and table separated under clear headings.
+
+
+3. Added basic but attractive CSS for layout, spacing, and styling.
+
+
+
+
+---
+
+Updated HTML with Labels and Sections
+
+<div class="goods-container">
+  <h2>Goods Registration & Management</h2>
+
+  <!-- Form Section -->
+  <section class="goods-form-section">
+    <h3>Goods Registration Form</h3>
+    <form [formGroup]="goodsForm" (ngSubmit)="saveGoods()" class="goods-form">
+      <label>Goods Name</label>
+      <input type="text" formControlName="name" placeholder="Goods Name" />
+
+      <label>Quantity</label>
+      <input type="number" formControlName="quantity" placeholder="Quantity" />
+
+      <label>Unit of Measure</label>
+      <input type="text" formControlName="unitOfMeasure" placeholder="Unit of Measure" />
+
+      <label>Location</label>
+      <input type="text" formControlName="location" placeholder="Location" />
+
+      <label>Expiry Date</label>
+      <input type="date" formControlName="expiryDate" />
+
+      <label>Minimum Stock Level</label>
+      <input type="number" formControlName="minimumStockLevel" placeholder="Minimum Stock" />
+
+      <label>Acquisition Date</label>
+      <input type="date" formControlName="acquisitionDate" />
+
+      <label>Price</label>
+      <input type="number" formControlName="price" placeholder="Price" />
+
+      <label>Supplier</label>
+      <input type="text" formControlName="supplier" placeholder="Supplier" />
+
+      <label>Category</label>
+      <select formControlName="categoryId" required>
+        <option value="">Select Category</option>
+        <option *ngFor="let cat of categories" [value]="cat.id">{{ cat.name }}</option>
+      </select>
+
+      <div class="form-buttons">
+        <button type="submit">{{ editMode ? 'Update' : 'Create' }} Goods</button>
+        <button type="button" (click)="resetForm()">Reset</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Table Section -->
+  <section class="goods-table-section">
+    <h3>Registered Goods List</h3>
+    <table class="goods-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Quantity</th>
+          <th>Location</th>
+          <th>Price</th>
+          <th>Supplier</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let goods of goodslist">
+          <td>{{ goods.name }}</td>
+          <td>{{ goods.quantity }}</td>
+          <td>{{ goods.location }}</td>
+          <td>{{ goods.price }}</td>
+          <td>{{ goods.supplier }}</td>
+          <td>{{ goods.status }}</td>
+          <td>
+            <button (click)="editGoods(goods)">Edit</button>
+            <button (click)="deleteGoods(goods.id)">Delete</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+
+
+---
+
+CSS for Styling
+
+.goods-container {
+  max-width: 1000px;
+  margin: 30px auto;
+  padding: 20px;
+  background: #fdfdfd;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+  font-family: Arial, sans-serif;
+}
+
+.goods-container h2, .goods-container h3 {
+  text-align: center;
+  color: #333;
+}
+
+.goods-form-section, .goods-table-section {
+  margin-top: 30px;
+}
+
+.goods-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.goods-form label {
+  grid-column: span 2;
+  font-weight: bold;
+  margin-top: 10px;
+}
+
+.goods-form input,
+.goods-form select {
+  padding: 8px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  width: 100%;
+}
+
+.form-buttons {
+  grid-column: span 2;
+  display: flex;
+  justify-content: space-between;
+}
+
+.form-buttons button {
+  padding: 10px 20px;
+  border: none;
+  background-color: #0066cc;
+  color: white;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.form-buttons button:hover {
+  background-color: #004999;
+}
+
+.goods-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+}
+
+.goods-table th,
+.goods-table td {
+  border: 1px solid #ddd;
+  padding: 12px;
+  text-align: center;
+}
+
+.goods-table th {
+  background-color: #f2f2f2;
+}
+
+.goods-table button {
+  padding: 6px 12px;
+  margin: 0 2px;
+  background-color: #007b5e;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.goods-table button:hover {
+  background-color: #005f46;
+}
+
+
+---
+
+Let me know if you'd like to add responsive design or custom colors to match your theme.
+
+
