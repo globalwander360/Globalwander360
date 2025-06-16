@@ -1,19 +1,16 @@
-this.getThrowbacks().pipe(
-  concatMap(() =>
-    this.initiationEventDataservice.getTransactionPropertiesByEventId(data.id, keys)
-  )
-).subscribe((transactionProperties: TransactionProperties[]) => {
-  const completionMotiveData = transactionProperties.filter(
-    (p: any) => p.categoryName === 'COMPLETION_MOTIVE'
-  );
+case BUFFER_FUNCTION.GET_TRANSACTION_PROPERTIES:
+  this.getThrowbacks().pipe(
+    concatMap(() => 
+      this.initiationEventDataservice.getTransactionPropertiesByEventId(data.id, keys)
+    )
+  ).subscribe((transactionProperties: TransactionProperties[]) => {
 
-  const completionMotives = completionMotiveData.map(motive => ({
-    id: motive.completionMotiveId,
-    comment: motive.completionMotiveComment
-  }));
+    const motiveLabels = transactionProperties
+      .filter(p => p.propertyType === 'COMPLETION_MOTIVE') // 👈 Filter for Completion Motive only
+      .map(p => p.propertyName)
+      .join(',');
 
-  return onload({
-    ...data,
-    completionMotives
+    return onLoad({ ...data, transactionProperties: motiveLabels });
+
   });
-});
+  break;
