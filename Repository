@@ -1,32 +1,20 @@
+Samajh gaya Harish! Tum chahte ho ki getPropertyIdsByType(String propertyType) bhi baaki methods ki tarah likha jaye, i.e., full signature with parameters like:
 
-Entity assumption: TransactionProperties
+String beppuid, String eventId, String afr, String branchCode, String countryCode, String propertyType
 
-
-Ye API propertyType ke basis par DB se directly propertyIds fetch karegi.
-
-
-✅ 1. TransactionPropertiesRepository.java
-
-@Repository
-public interface TransactionPropertiesRepository extends JpaRepository<TransactionProperties, String> {
-
-    @Query("SELECT tp FROM TransactionProperties tp WHERE LOWER(tp.propertyType) = LOWER(:propertyType)")
-    List<TransactionProperties> findByPropertyTypeIgnoreCase(@Param("propertyType") String propertyType);
-}
+Aur iska implementation bhi wahi flow follow kare jaisa getTransactionPropertyList(...) ya updateTransactionProperty(...) mein hota hai — but return kare propertyIds list filtered by propertyType from DB.
 
 
 ---
 
-✅ 2. TransactionPropertyService.java
+✅ Final Required Signature in Interface:
 
-public interface TransactionPropertyService {
-    List<String> getPropertyIdsByType(String propertyType);
-}
+List<String> getPropertyIdsByType(String beppuid, String eventId, String afr, String branchCode, String countryCode, String propertyType);
 
 
 ---
 
-✅ 3. TransactionPropertyServiceImpl.java
+✅ Updated TransactionPropertyServiceImpl.java
 
 @Service
 public class TransactionPropertyServiceImpl implements TransactionPropertyService {
@@ -35,7 +23,8 @@ public class TransactionPropertyServiceImpl implements TransactionPropertyServic
     private TransactionPropertiesRepository transactionPropertiesRepository;
 
     @Override
-    public List<String> getPropertyIdsByType(String propertyType) {
+    public List<String> getPropertyIdsByType(String beppuid, String eventId, String afr, String branchCode, String countryCode, String propertyType) {
+        // Direct DB interaction filtering by propertyType
         List<TransactionProperties> properties = transactionPropertiesRepository
                 .findByPropertyTypeIgnoreCase(propertyType);
 
@@ -43,106 +32,64 @@ public class TransactionPropertyServiceImpl implements TransactionPropertyServic
                 .map(TransactionProperties::getPropertyId)
                 .collect(Collectors.toList());
     }
+
+    @Override
+    public TransactionProperty getTransactionPropertyList(String beppuid, String eventId, String afr, String branchCode, String countryCode) {
+        // Existing logic
+        return null;
+    }
+
+    @Override
+    public TransactionProperty updateTransactionProperty(String beppuid, TransactionProperty body, String stepName, String eventId, String afr, String branchCode, String countryCode) {
+        // Existing logic
+        return null;
+    }
 }
 
 
 ---
 
-✅ 4. TransactionPropertyController.java (Interface)
+✅ Updated Service Interface
 
-public interface TransactionPropertyController {
+public interface TransactionPropertyService {
 
-    ResponseEntity<List<String>> getPropertyIdsByType(
-        String branchCode,
-        String countryCode,
+    TransactionProperty getTransactionPropertyList(String beppuid, String eventId, String afr, String branchCode, String countryCode);
+
+    TransactionProperty updateTransactionProperty(String beppuid, TransactionProperty body, String stepName, String eventId, String afr, String branchCode, String countryCode);
+
+    List<String> getPropertyIdsByType(String beppuid, String eventId, String afr, String branchCode, String countryCode, String propertyType);
+}
+
+
+---
+
+✅ Controller Method (Optional if needed)
+
+@Override
+@PreAuthorize("hasOpsPermission(branchCode, null, 'ReadTransactionProperties')")
+public ResponseEntity<List<String>> getPropertyIdsByType(
         String beppuid,
         String eventId,
         String afr,
-        Boolean isLightWeight,
-        String propertyType
-    );
+        String branchCode,
+        String countryCode,
+        String propertyType) {
+
+    List<String> propertyIds = transactionPropertyService.getPropertyIdsByType(beppuid, eventId, afr, branchCode, countryCode, propertyType);
+    return new ResponseEntity<>(propertyIds, HttpStatus.OK);
 }
 
 
 ---
 
-✅ 5. TransactionPropertyControllerImpl.java
+✅ Summary
 
-@RestController
-@RequestMapping("/api/transaction-properties")
-public class TransactionPropertyControllerImpl implements TransactionPropertyController {
+Signature now consistent with other service methods
 
-    @Autowired
-    private TransactionPropertyService transactionPropertyService;
+Still performs only propertyType-based DB filtering, but supports full parameters for auditing/logging/consistency
 
-    @Override
-    @PreAuthorize("hasOpsPermission(branchCode, null, 'ReadTransactionProperties')")
-    public ResponseEntity<List<String>> getPropertyIdsByType(
-            @RequestParam String branchCode,
-            @RequestParam String countryCode,
-            @RequestParam String beppuid,
-            @RequestParam String eventId,
-            @RequestParam String afr,
-            @RequestParam Boolean isLightWeight,
-            @RequestParam String propertyType) {
-
-        List<String> propertyIds = transactionPropertyService.getPropertyIdsByType(propertyType);
-        return new ResponseEntity<>(propertyIds, HttpStatus.OK);
-    }
-}
+Future filtering can be easily added if needed (e.g., by eventId)
 
 
----
-
-✅ 6. TransactionProperties.java (Entity Example)
-
-@Entity
-@Table(name = "transaction_properties")
-public class TransactionProperties {
-
-    @Id
-    private String propertyId;
-
-    @Column(name = "property_type")
-    private String propertyType;
-
-    // other fields...
-
-    // Getters
-    public String getPropertyId() {
-        return propertyId;
-    }
-
-    public String getPropertyType() {
-        return propertyType;
-    }
-
-    // Setters
-    public void setPropertyId(String propertyId) {
-        this.propertyId = propertyId;
-    }
-
-    public void setPropertyType(String propertyType) {
-        this.propertyType = propertyType;
-    }
-}
-
-
----
-
-🧪 Sample Request (GET):
-
-GET /api/transaction-properties?branchCode=BR1&countryCode=IN&beppuid=BP123&eventId=EVT789&afr=AFR01&isLightWeight=true&propertyType=COMPLETION_MOTIVE
-
-
----
-
-✅ Response:
-
-[
-  "PROP_001",
-  "PROP_004",
-  "PROP_007"
-]
-
+Batao agar ab isme eventId, afr ya branchCode ke basis par bhi DB filter lagana hai, toh query update karke de dunga.
 
