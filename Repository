@@ -1,29 +1,148 @@
-@Override
-@PreAuthorize("hasOpsPermission(branchCode, null, 'ReadTransactionProperties')")
-public ResponseEntity<List<String>> getTransactionPropertyIdsByType(
+
+Entity assumption: TransactionProperties
+
+
+Ye API propertyType ke basis par DB se directly propertyIds fetch karegi.
+
+
+✅ 1. TransactionPropertiesRepository.java
+
+@Repository
+public interface TransactionPropertiesRepository extends JpaRepository<TransactionProperties, String> {
+
+    @Query("SELECT tp FROM TransactionProperties tp WHERE LOWER(tp.propertyType) = LOWER(:propertyType)")
+    List<TransactionProperties> findByPropertyTypeIgnoreCase(@Param("propertyType") String propertyType);
+}
+
+
+---
+
+✅ 2. TransactionPropertyService.java
+
+public interface TransactionPropertyService {
+    List<String> getPropertyIdsByType(String propertyType);
+}
+
+
+---
+
+✅ 3. TransactionPropertyServiceImpl.java
+
+@Service
+public class TransactionPropertyServiceImpl implements TransactionPropertyService {
+
+    @Autowired
+    private TransactionPropertiesRepository transactionPropertiesRepository;
+
+    @Override
+    public List<String> getPropertyIdsByType(String propertyType) {
+        List<TransactionProperties> properties = transactionPropertiesRepository
+                .findByPropertyTypeIgnoreCase(propertyType);
+
+        return properties.stream()
+                .map(TransactionProperties::getPropertyId)
+                .collect(Collectors.toList());
+    }
+}
+
+
+---
+
+✅ 4. TransactionPropertyController.java (Interface)
+
+public interface TransactionPropertyController {
+
+    ResponseEntity<List<String>> getPropertyIdsByType(
         String branchCode,
         String countryCode,
         String beppuid,
         String eventId,
         String afr,
         Boolean isLightWeight,
-        String propertyType) {
-
-    TransactionProperty transactionPropertyModel = null;
-
-    if (eventId != null) {
-        transactionPropertyModel = transactionPropertyService
-                .getTransactionPropertyList(beppuid, eventId, afr, branchCode, countryCode, isLightWeight);
-    }
-
-    List<String> matchedPropertyIds = new ArrayList<>();
-
-    if (transactionPropertyModel != null && transactionPropertyModel.getProperties() != null) {
-        matchedPropertyIds = transactionPropertyModel.getProperties().stream()
-            .filter(p -> propertyType.equalsIgnoreCase(p.getPropertyType()))
-            .map(TransactionProperties::getPropertyId)
-            .collect(Collectors.toList());
-    }
-
-    return new ResponseEntity<>(matchedPropertyIds, HttpStatus.OK);
+        String propertyType
+    );
 }
+
+
+---
+
+✅ 5. TransactionPropertyControllerImpl.java
+
+@RestController
+@RequestMapping("/api/transaction-properties")
+public class TransactionPropertyControllerImpl implements TransactionPropertyController {
+
+    @Autowired
+    private TransactionPropertyService transactionPropertyService;
+
+    @Override
+    @PreAuthorize("hasOpsPermission(branchCode, null, 'ReadTransactionProperties')")
+    public ResponseEntity<List<String>> getPropertyIdsByType(
+            @RequestParam String branchCode,
+            @RequestParam String countryCode,
+            @RequestParam String beppuid,
+            @RequestParam String eventId,
+            @RequestParam String afr,
+            @RequestParam Boolean isLightWeight,
+            @RequestParam String propertyType) {
+
+        List<String> propertyIds = transactionPropertyService.getPropertyIdsByType(propertyType);
+        return new ResponseEntity<>(propertyIds, HttpStatus.OK);
+    }
+}
+
+
+---
+
+✅ 6. TransactionProperties.java (Entity Example)
+
+@Entity
+@Table(name = "transaction_properties")
+public class TransactionProperties {
+
+    @Id
+    private String propertyId;
+
+    @Column(name = "property_type")
+    private String propertyType;
+
+    // other fields...
+
+    // Getters
+    public String getPropertyId() {
+        return propertyId;
+    }
+
+    public String getPropertyType() {
+        return propertyType;
+    }
+
+    // Setters
+    public void setPropertyId(String propertyId) {
+        this.propertyId = propertyId;
+    }
+
+    public void setPropertyType(String propertyType) {
+        this.propertyType = propertyType;
+    }
+}
+
+
+---
+
+🧪 Sample Request (GET):
+
+GET /api/transaction-properties?branchCode=BR1&countryCode=IN&beppuid=BP123&eventId=EVT789&afr=AFR01&isLightWeight=true&propertyType=COMPLETION_MOTIVE
+
+
+---
+
+✅ Response:
+
+[
+  "PROP_001",
+  "PROP_004",
+  "PROP_007"
+]
+
+
