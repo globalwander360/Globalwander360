@@ -1,95 +1,62 @@
-Samajh gaya Harish! Tum chahte ho ki getPropertyIdsByType(String propertyType) bhi baaki methods ki tarah likha jaye, i.e., full signature with parameters like:
-
-String beppuid, String eventId, String afr, String branchCode, String countryCode, String propertyType
-
-Aur iska implementation bhi wahi flow follow kare jaisa getTransactionPropertyList(...) ya updateTransactionProperty(...) mein hota hai — but return kare propertyIds list filtered by propertyType from DB.
-
-
----
-
-✅ Final Required Signature in Interface:
-
-List<String> getPropertyIdsByType(String beppuid, String eventId, String afr, String branchCode, String countryCode, String propertyType);
-
-
----
-
-✅ Updated TransactionPropertyServiceImpl.java
-
-@Service
-public class TransactionPropertyServiceImpl implements TransactionPropertyService {
-
-    @Autowired
-    private TransactionPropertiesRepository transactionPropertiesRepository;
-
-    @Override
-    public List<String> getPropertyIdsByType(String beppuid, String eventId, String afr, String branchCode, String countryCode, String propertyType) {
-        // Direct DB interaction filtering by propertyType
-        List<TransactionProperties> properties = transactionPropertiesRepository
-                .findByPropertyTypeIgnoreCase(propertyType);
-
-        return properties.stream()
-                .map(TransactionProperties::getPropertyId)
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    public TransactionProperty getTransactionPropertyList(String beppuid, String eventId, String afr, String branchCode, String countryCode) {
-        // Existing logic
-        return null;
-    }
-
-    @Override
-    public TransactionProperty updateTransactionProperty(String beppuid, TransactionProperty body, String stepName, String eventId, String afr, String branchCode, String countryCode) {
-        // Existing logic
-        return null;
-    }
-}
-
-
----
-
-✅ Updated Service Interface
-
-public interface TransactionPropertyService {
-
-    TransactionProperty getTransactionPropertyList(String beppuid, String eventId, String afr, String branchCode, String countryCode);
-
-    TransactionProperty updateTransactionProperty(String beppuid, TransactionProperty body, String stepName, String eventId, String afr, String branchCode, String countryCode);
-
-    List<String> getPropertyIdsByType(String beppuid, String eventId, String afr, String branchCode, String countryCode, String propertyType);
-}
-
-
----
-
-✅ Controller Method (Optional if needed)
-
-@Override
-@PreAuthorize("hasOpsPermission(branchCode, null, 'ReadTransactionProperties')")
-public ResponseEntity<List<String>> getPropertyIdsByType(
-        String beppuid,
-        String eventId,
-        String afr,
-        String branchCode,
-        String countryCode,
-        String propertyType) {
-
-    List<String> propertyIds = transactionPropertyService.getPropertyIdsByType(beppuid, eventId, afr, branchCode, countryCode, propertyType);
-    return new ResponseEntity<>(propertyIds, HttpStatus.OK);
-}
-
-
----
-
-✅ Summary
-
-Signature now consistent with other service methods
-
-Still performs only propertyType-based DB filtering, but supports full parameters for auditing/logging/consistency
-
-Future filtering can be easily added if needed (e.g., by eventId)
-
-
-Batao agar ab isme eventId, afr ya branchCode ke basis par bhi DB filter lagana hai, toh query update karke de dunga.
-
+paths:
+  /api/transaction-properties/property-ids:
+    get:
+      tags:
+        - TransactionProperty
+      summary: Get Property IDs by Property Type
+      description: Returns a list of transaction property IDs based on the provided property type.
+      operationId: getPropertyIdsByType
+      parameters:
+        - in: header
+          name: bnppuid
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: branchCode
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: countryCode
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: eventId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: afr
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: propertyType
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully retrieved list of property IDs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+        '400':
+          $ref: '../common-specs/common-errors.yaml#/BadRequestError'
+        '401':
+          $ref: '../common-specs/common-errors.yaml#/UnauthorizedError'
+        '403':
+          $ref: '../common-specs/common-errors.yaml#/ForbiddenError'
+        '429':
+          $ref: '../common-specs/common-errors.yaml#/TooManyRequestsError'
+        '500':
+          $ref: '../common-specs/common-errors.yaml#/InternalServerError'
+        '502':
+          $ref: '../common-specs/common-errors.yaml#/BadGatewayError'
+        '503':
+          $ref: '../common-specs/common-errors.yaml#/ServiceUnavailableError'
