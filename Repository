@@ -1,6 +1,6 @@
 @Override
 @PreAuthorize("hasOpsPermission(branchCode, null, 'ReadTransactionProperties')")
-public ResponseEntity<String> getTransactionPropertyIdByType(
+public ResponseEntity<List<String>> getTransactionPropertyIdsByType(
         String branchCode,
         String countryCode,
         String beppuid,
@@ -16,15 +16,14 @@ public ResponseEntity<String> getTransactionPropertyIdByType(
                 .getTransactionPropertyList(beppuid, eventId, afr, branchCode, countryCode, isLightWeight);
     }
 
-    String matchedPropertyId = null;
+    List<String> matchedPropertyIds = new ArrayList<>();
 
     if (transactionPropertyModel != null && transactionPropertyModel.getProperties() != null) {
-        matchedPropertyId = transactionPropertyModel.getProperties().stream()
+        matchedPropertyIds = transactionPropertyModel.getProperties().stream()
             .filter(p -> propertyType.equalsIgnoreCase(p.getPropertyType()))
             .map(TransactionProperties::getPropertyId)
-            .findFirst()
-            .orElse(null);
+            .collect(Collectors.toList());
     }
 
-    return new ResponseEntity<>(matchedPropertyId, HttpStatus.OK);
+    return new ResponseEntity<>(matchedPropertyIds, HttpStatus.OK);
 }
