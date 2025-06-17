@@ -1,16 +1,30 @@
-case BUFFER_FUNCTION.GET_TRANSACTION_PROPERTIES:
-  this.getThrowbacks().pipe(
-    concatMap(() => 
-      this.initiationEventDataservice.getTransactionPropertiesByEventId(data.id, keys)
-    )
-  ).subscribe((transactionProperties: TransactionProperties[]) => {
+@Override
+@PreAuthorize("hasOpsPermission(branchCode, null, 'ReadTransactionProperties')")
+public ResponseEntity<String> getTransactionPropertyIdByType(
+        String branchCode,
+        String countryCode,
+        String beppuid,
+        String eventId,
+        String afr,
+        Boolean isLightWeight,
+        String propertyType) {
 
-    const motiveLabels = transactionProperties
-      .filter(p => p.propertyType === 'COMPLETION_MOTIVE') // 👈 Filter for Completion Motive only
-      .map(p => p.propertyName)
-      .join(',');
+    TransactionProperty transactionPropertyModel = null;
 
-    return onLoad({ ...data, transactionProperties: motiveLabels });
+    if (eventId != null) {
+        transactionPropertyModel = transactionPropertyService
+                .getTransactionPropertyList(beppuid, eventId, afr, branchCode, countryCode, isLightWeight);
+    }
 
-  });
-  break;
+    String matchedPropertyId = null;
+
+    if (transactionPropertyModel != null && transactionPropertyModel.getProperties() != null) {
+        matchedPropertyId = transactionPropertyModel.getProperties().stream()
+            .filter(p -> propertyType.equalsIgnoreCase(p.getPropertyType()))
+            .map(TransactionProperties::getPropertyId)
+            .findFirst()
+            .orElse(null);
+    }
+
+    return new ResponseEntity<>(matchedPropertyId, HttpStatus.OK);
+}
