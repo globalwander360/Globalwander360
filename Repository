@@ -127,3 +127,161 @@ paths:
                 type: array
                 items: { type: string }
 
+
+
+Bilkul Harish! 🔥
+Tu keh raha hai ki:
+
+> eventId → EventTransactionPropertiesEntity → transactionPropertiesId
+transactionPropertiesId → TransactionPropertyEntity → propertyName
+(Aur TransactionPropertyEntity ka data dpwEventHelper.getTransactionPropertiesFromRef(id) se aata hai)
+
+
+
+
+---
+
+🔄 Clear Flow:
+
+1. Step 1: eventId se get all EventTransactionPropertiesEntity
+
+
+2. Step 2: Un sab ka transactionPropertiesId le
+
+
+3. Step 3: dpwEventHelper.getTransactionPropertiesFromRef(id) se propertyName nikal
+
+
+4. Step 4: Agar propertyType match karta hai to list me us propertyName ko add kar
+
+
+
+
+---
+
+✅ Final Code (Service Impl)
+
+@Override
+public List<String> getPropertyNamesByEventIdAndType(String eventId, String propertyType) {
+
+    // Step 1: Get all EventTransactionProperties for this event
+    List<EventTransactionPropertiesEntity> eventProps = eventTransactionPropertiesRepository
+            .findByEventId(eventId);
+
+    if (eventProps.isEmpty()) {
+        return Collections.emptyList();
+    }
+
+    // Step 2: Extract transactionPropertyIds
+    List<String> transactionPropertyIds = eventProps.stream()
+            .map(EventTransactionPropertiesEntity::getTransactionPropertiesId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toList());
+
+    if (transactionPropertyIds.isEmpty()) {
+        return Collections.emptyList();
+    }
+
+    // Step 3: Use dpwHelper to get full property details and filter by type
+    List<String> propertyNames = new ArrayList<>();
+
+    for (String propertyId : transactionPropertyIds) {
+        TransactionProperties fullProp = dpwEventHelper.getTransactionPropertiesFromRef(propertyId);
+        if (fullProp != null 
+                && fullProp.getPropertyType() != null 
+                && fullProp.getPropertyType().equalsIgnoreCase(propertyType)
+                && fullProp.getPropertyName() != null) {
+            propertyNames.add(fullProp.getPropertyName());
+        }
+    }
+
+    return propertyNames;
+}
+
+
+---
+
+✅ Repository Interfaces
+
+// Event side repository
+List<EventTransactionPropertiesEntity> findByEventId(String eventId);
+
+✅ Entity Mapping:
+
+EventTransactionPropertiesEntity.java
+
+public class EventTransactionPropertiesEntity {
+    private String eventId;
+    private String transactionPropertiesId; // foreign key
+}
+
+TransactionProperties.java
+
+public class TransactionProperties {
+    private String id;
+    private String propertyName;
+    private String propertyType;
+}
+
+
+---
+
+🔁 Controller Endpoint
+
+@GetMapping("/property-names")
+public ResponseEntity<List<String>> getPropertyNamesByEventAndType(
+        @RequestHeader("bnppuid") String bnppuid,
+        @RequestHeader("branchCode") String branchCode,
+        @RequestHeader("countryCode") String countryCode,
+        @RequestParam("eventId") String eventId,
+        @RequestParam("propertyType") String propertyType) {
+
+    if (StringUtils.isAnyBlank(bnppuid, branchCode, countryCode, eventId, propertyType)) {
+        throw new BadRequestException("Missing required parameters");
+    }
+
+    List<String> names = transactionPropertyService
+            .getPropertyNamesByEventIdAndType(eventId, propertyType);
+
+    return ResponseEntity.ok(names);
+}
+
+
+---
+
+🔥 Sample Response
+
+[
+  "Completion Motive",
+  "Rejection Comment"
+]
+
+
+---
+
+✅ Summary:
+
+Item	Status
+
+eventId based fetch	✅ Done
+Foreign key via EventTransactionPropertiesEntity	✅ Used
+dpwHelper usage	✅ Done
+Filter by propertyType	✅ Done
+Return propertyName list	✅ Done
+
+
+
+---
+
+Agar chaho to:
+
+Object instead of just name return karein (ID + Name)
+
+Frontend sample bana doon
+
+Postman test case likh doon
+
+
+Bol Harish Bhai 😎
+
+
