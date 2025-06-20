@@ -1,90 +1,134 @@
-Bhai 🔥 bilkul sahi pakde ho!
-Haan, bnppuid, branchCode, countryCode — in teeno ko validate karna bhi mandatory hai, aur agar zarurat ho to business logic me use bhi karna hai.
-
-
----
-
-✅ Final Method: getPropertyNamesByEventIdAndType(...) with Headers Validation
-
-@Override
-public List<String> getPropertyNamesByEventIdAndType(
-        String bnppuid,
-        String branchCode,
-        String countryCode,
-        String eventId,
-        String propertyType) {
-
-    // Step 0: Validate required fields
-    if (StringUtils.isAnyBlank(bnppuid, branchCode, countryCode, eventId, propertyType)) {
-        throw new BadRequestException("Missing required headers or parameters");
+// Alternative simpler version without headers (if needed)
+public List<String> getPropertyNamesByEventIdAndType(String eventId, String propertyType) {
+    try {
+        // Step 1: Find records by eventId and propertyType
+        List<EventTransactionPropertiesEntity> eventTxnProps = eventTransactionPropertiesRepository
+            .findByEventIdAndPropertyType(eventId, propertyType);
+        
+        if (eventTxnProps.isEmpty()) {
+            return Collections.emptyList();
+        }
+        
+        // Step 2: Extract transactionPropertyIds
+        List<Long> transactionPropertyIds = eventTxnProps.stream()
+            .map(EventTransactionPropertiesEntity::getTransactionPropertyId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .collect(Collectors.toList());
+        
+        if (transactionPropertyIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        
+        // Step 3: Get transaction properties from helper
+        List<TransactionPropertyEntity> transactionProperties = 
+            dpwEventHelper.getTransactionPropertiesFromRef(transactionPropertyIds);
+        
+        if (transactionProperties == null || transactionProperties.isEmpty()) {
+            return Collections.emptyList();
+        }
+        
+        // Step 4: Extract property names directly
+        List<String> propertyNames = transactionProperties.stream()
+            .map(TransactionPropertyEntity::getPropertyName)
+            .filter(Objects::nonNull)
+            .distinct()
+            .collect(Collectors.toList());
+        
+        return propertyNames;
+        
+    } catch (Exception e) {
+        log.error("Error getting property names for eventId: {} and propertyType: {}", 
+                 eventId, propertyType, e);
+        throw new DpwServiceException("Failed to get property names", e);
     }
+}
 
-    // Step 1: Get all EventTransactionPropertiesEntity by eventId
-    List<EventTransactionPropertiesEntity> eventProps = eventTransactionPropertiesRepository
+/**
+ * Complete implementation with headers validation
+ * @param bnppuid User ID
+ * @param branchCode Branch code
+ * @param countryCode Country code  
+ * @param eventId The event ID to search for
+ * @param propertyType The property type to filter by
+ * @return List of property names matching the criteria
+ */
+@Override
+public List<String> getPropertyNamesByEventIdAndType(String bnppuid, String branchCode, 
+                                                    String countryCode, String eventId, String propertyType) {
+    try {
+        // Validate required parameters
+        if (StringUtils.isAnyBlank(bnppuid, branchCode, countryCode, eventId, propertyType)) {
+            throw new BadRequestException("Missing required headers or parameters");
+        }
+
+        // Step 1: Get all properties matching propertyType via repository
+        List<TransactionProperties> matchingTypeProps = transactionPropertiesRepository
+            .findByPropertyTypeIgnoreCase(propertyType);
+
+        if (matchingTypeProps.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // Step 2: Create Map of propertyId -> propertyName using dpwEventHelper
+        Map<String, String> propertyIdToNameMap = new HashMap<>();
+        for (TransactionProperties prop : matchingTypeProps) {
+            TransactionProperties fullProp = (TransactionProperties) dpwEventHelper
+                .getTransactionPropertiesFromRef(prop.getId());
+            if (fullProp != null && fullProp.getPropertyName() != null) {
+                propertyIdToNameMap.put(prop.getId(), fullProp.getPropertyName());
+            }
+        }
+
+        if (propertyIdToNameMap.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // Step 3: Get all properties for the given eventId
+        List<EventTransactionPropertiesEntity> eventProperties = eventTransactionPropertiesRepository
             .findByEventId(eventId);
 
-    if (eventProps.isEmpty()) {
-        return Collections.emptyList();
-    }
+        if (eventProperties.isEmpty()) {
+            return Collections.emptyList();
+        }
 
-    // Step 2: Extract property IDs
-    List<String> transactionPropertyIds = eventProps.stream()
-            .map(EventTransactionPropertiesEntity::getTransactionPropertiesId)
+        // Step 4: Match event's properties with map and collect names
+        List<String> propertyNames = eventProperties.stream()
+            .map(EventTransactionPropertiesEntity::getTransactionPropertyId) // Fixed: use transactionPropertyId instead of getId()
+            .map(String::valueOf) // Convert Long to String for map lookup
+            .filter(propertyIdToNameMap::containsKey)
+            .map(propertyIdToNameMap::get)
             .filter(Objects::nonNull)
+            .distinct()
             .collect(Collectors.toList());
 
-    // Step 3: Get full property using dpwEventHelper & filter by propertyType
-    List<String> propertyNames = new ArrayList<>();
-
-    for (String propertyId : transactionPropertyIds) {
-        TransactionProperties prop = dpwEventHelper.getTransactionPropertiesFromRef(propertyId);
+        return propertyNames;
         
-        if (prop != null 
-            && prop.getPropertyType() != null 
-            && prop.getPropertyType().equalsIgnoreCase(propertyType)
-            && prop.getPropertyName() != null) {
-            
-            // Optional: Logging or validation using bnppuid / branchCode / countryCode
-            propertyNames.add(prop.getPropertyName());
-        }
+    } catch (BadRequestException e) {
+        throw e; // Re-throw BadRequestException as-is
+    } catch (Exception e) {
+        log.error("Error getting property names for eventId: {} and propertyType: {}", 
+                 eventId, propertyType, e);
+        throw new DpwServiceException("Failed to get property names", e);
     }
-
-    return propertyNames;
 }
 
-
----
-
-✅ Updated Controller Call
-
-@GetMapping("/property-names")
-@PreAuthorize("hasOpsPermission(branchCode, null, 'ReadTransactionProperties')")
-public ResponseEntity<List<String>> getPropertyNamesByEventAndType(
-        @RequestHeader("bnppuid") String bnppuid,
-        @RequestHeader("branchCode") String branchCode,
-        @RequestHeader("countryCode") String countryCode,
-        @RequestParam("eventId") String eventId,
-        @RequestParam("propertyType") String propertyType) {
-
-    List<String> names = transactionPropertyService
-            .getPropertyNamesByEventIdAndType(
-                bnppuid, branchCode, countryCode, eventId, propertyType
-            );
-
-    return ResponseEntity.ok(names);
+/**
+ * Integration with your existing filterRequests method
+ * Add this where you need to set property names in your export logic
+ */
+private void setPropertyNamesForRequest(Request request, String propertyType, 
+                                       String bnppuid, String branchCode, String countryCode) {
+    if (request.getEventId() != null) {
+        List<String> propertyNames = getPropertyNamesByEventIdAndType(
+            bnppuid, branchCode, countryCode, request.getEventId(), propertyType);
+        
+        // Set the property names in your request object
+        // Assuming you have a field to store this, adjust as needed
+        request.setPropertyNames(propertyNames);
+        
+        // Or if you need to concatenate them as a single string
+        String concatenatedNames = String.join(", ", propertyNames);
+        request.setPropertyNamesString(concatenatedNames);
+    }
 }
-
-
----
-
-✅ Service Interface
-
-List<String> getPropertyNamesByEventIdAndType(
-    String bnppuid,
-    String branchCode,
-    String countryCode,
-    String eventId,
-    String propertyType
-);
-
-
