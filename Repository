@@ -151,3 +151,154 @@ public interface TranslationPropertiesService {
 }
 
 
+
+
+
+// Most optimized version using the new repository method
+@Override
+public String getPropertyNameByEventIdAndType(String eventId, String propertyType) {
+    // Step 1: Get the first matching EventTransactionPropertiesEntity using optimized query
+    Optional<EventTransactionPropertiesEntity> eventTxnPropOptional = 
+            transactionPropertiesRepository.findFirstByEventIdAndPropertyType(eventId, propertyType);
+
+    if (!eventTxnPropOptional.isPresent()) {
+        return null;
+    }
+
+    EventTransactionPropertiesEntity eventTxnProp = eventTxnPropOptional.get();
+    Long transactionPropertyId = eventTxnProp.getTransactionPropertyId();
+    
+    if (transactionPropertyId == null) {
+        return null;
+    }
+
+    // Step 2: Get transaction property from helper (single ID)
+    List<TransactionalProperty> transactionProperties =
+            dpwEventHelper.getTransactionPropertiesFromRef(String.valueOf(transactionPropertyId));
+
+    if (transactionProperties == null || transactionProperties.isEmpty()) {
+        return null;
+    }
+
+    // Step 3: Return the property name
+    TransactionalProperty property = transactionProperties.get(0);
+    return property != null ? property.getPropertyName() : null;
+}
+
+// Keep the original method for backward compatibility if needed
+@Override
+public List<String> getPropertyNamesByEventIdAndType(String eventId, String propertyType) {
+    List<EventTransactionPropertiesEntity> eventTxnProps = transactionPropertiesRepository
+            .findByEventIdAndPropertyType(eventId, propertyType);
+
+    if (eventTxnProps.isEmpty()) {
+        return Collections.emptyList();
+    }
+
+    // Step 2: Extract transactionPropertyIds
+    List<Long> transactionPropertyIds = eventTxnProps.stream()
+            .map(EventTransactionPropertiesEntity::getTransactionPropertyId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .collect(Collectors.toList());
+
+    if (transactionPropertyIds.isEmpty()) {
+        return Collections.emptyList();
+    }
+
+    // Step 3: Get transaction properties from helper
+    List<TransactionalProperty> transactionProperties =
+            dpwEventHelper.getTransactionPropertiesFromRef(String.valueOf(transactionPropertyIds));
+
+    if (transactionProperties == null || transactionProperties.isEmpty()) {
+        return Collections.emptyList();
+    }
+
+    // Step 4: Extract property names directly
+    List<String> propertyNames = transactionProperties.stream()
+            .map(TransactionalProperty::getPropertyName)
+            .filter(Objects::nonNull)
+            .distinct()
+            .collect(Collectors.toList());
+
+    return propertyNames;
+}
+
+
+@Override
+@PreAuthorize("hasOpsPermission(#branchCode, null, 'ReadEvent')")
+public ResponseEntity<byte[]> exportEvents(String branchCode, String bnppuid, String countryCode, 
+        String acceptLanguage, String q, Integer skip, Integer take, String orderBy, 
+        SortDirection direction, String timezone, Export export) {
+
+    ArrayList<String> fields = getAllFieldsSimpleNames(EventEntity.class);
+
+    RsqlSearchCriteria rsqlSearchCriteria = new RsqlSearchCriteria();
+    rsqlSearchCriteria.setPgpeCodes(export.getPgpeCodes());
+
+    if (!fields.contains(orderBy))
+        orderBy = null;
+
+    final PageRequest pageRequest = ControllerUtils.createPageRequest(skip, exportLimit, orderBy, 
+            defaultOrder: "id", direction);
+
+    List<DpwEventExportDTO> eventExportDtoList;
+    EventListsPage eventListsPage;
+
+    try {
+        eventListsPage = eventService.filterEvents(q, pageRequest, bnppuid, exportFile: true, 
+                customQueueCount: null, branchCode, countryCode, rsqlSearchCriteria);
+
+        eventExportDtoList = eventMapper.mapToEventExportDtoList(eventListsPage.getResults());
+
+        // Populate transaction property names for each event
+        for (DpwEventExportDTO dpwEventExportDTO : eventExportDtoList) {
+            setSystemSpecificDateTimeForEvent(dpwEventExportDTO, timezone);
+            
+            // Get and set transaction property name for this specific event
+            // This will return only ONE property name per event based on eventId and propertyType
+            String propertyName = translationPropertiesService.getPropertyNameByEventIdAndType(
+                    dpwEventExportDTO.getId(), // Event ID
+                    "YOUR_PROPERTY_TYPE" // Replace with your actual property type like "TRANSACTION", "PAYMENT", etc.
+            );
+            
+            // Set the property name (will be null if no match found)
+            dpwEventExportDTO.setTransactionpropertyname(propertyName);
+        }
+    } catch (Exception e) {
+        log.error("Export events error:", e);
+        Thread.currentThread().interrupt();
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+    }
+
+    try {
+        ExcelExportHelper<DpwEventExportDTO> excelExportHelper = new ExcelExportHelper<>(eventExportDtoList,
+                DpwEventExportDTO.class, getFormattedDateColumn(export.getColumns()), export.getExcelHeaders());
+
+        ByteArrayOutputStream bos = excelExportHelper.createFileContent(eventListsPage.getExcelCount());
+        HttpHeaders responseHeaders = excelExportHelper.generateHttpHeaders(bos);
+
+        return new ResponseEntity<>(bos.toByteArray(), responseHeaders, HttpStatus.OK);
+
+    } catch (IOException e) {
+        log.error("exportEvents error:", e);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+    }
+}
+
+
+
+// Add this method to your TransactionPropertiesRepository interface
+
+public interface TransactionPropertiesRepository extends JpaRepository<EventTransactionPropertiesEntity, Long> {
+    
+    // Existing method
+    List<EventTransactionPropertiesEntity> findByEventIdAndPropertyType(String eventId, String propertyType);
+    
+    // New optimized method to get only the first result
+    @Query("SELECT e FROM EventTransactionPropertiesEntity e WHERE e.eventId = :eventId AND e.propertyType = :propertyType ORDER BY e.id ASC")
+    Optional<EventTransactionPropertiesEntity> findFirstByEventIdAndPropertyType(@Param("eventId") String eventId, @Param("propertyType") String propertyType);
+}
+
+
+
