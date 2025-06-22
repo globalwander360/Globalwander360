@@ -1,143 +1,17 @@
-Perfect! Below is the full updated source code with only the changes related to TransactionProperty integration for Excel export. I’ve excluded unrelated parts and kept only what’s needed to support your requirement:
-
-
----
-
-✅ 1. TransactionPropertyService.java
-
-package com.bnpparibas.dpw.service;
-
-import com.bnpparibas.dpw.controller.model.TransactionProperty;
-
-import java.util.List;
-
-public interface TransactionPropertyService {
-
-    TransactionProperty createTransactionProperty(String bnppuid, TransactionProperty body, String stepName, boolean isManualUpdate, String branchCode, String countryCode);
-
-    TransactionProperty getTransactionPropertyList(String bnppuid, String eventId, String mfr, String branchCode, String countryCode, Boolean isLightWeight);
-
-    TransactionProperty updateTransactionProperty(String bnppuid, TransactionProperty body, String stepName, String eventId, String mfr, String branchCode, String countryCode);
-
-    // ✅ Added for Excel Export
-    List<String> getPropertyNamesByEventIdAndType(String eventId, String propertyType);
-}
-
-
----
-
-✅ 2. TransactionPropertyServiceImpl.java
-
-package com.bnpparibas.dpw.service.impl;
-
-import com.bnpparibas.dpw.controller.model.TransactionProperty;
-import com.bnpparibas.dpw.entity.EventTransactionPropertiesEntity;
-import com.bnpparibas.dpw.external.model.TransactionalProperty;
-import com.bnpparibas.dpw.repository.TransactionPropertiesRepository;
-import com.bnpparibas.dpw.service.TransactionPropertyService;
-import com.bnpparibas.dpw.util.DpwEventHelper;
-
-import org.springframework.stereotype.Service;
-
-import java.util.*;
-import java.util.stream.Collectors;
-
-@Service
-public class TransactionPropertyServiceImpl implements TransactionPropertyService {
-
-    private final TransactionPropertiesRepository transactionPropertiesRepository;
-    private final DpwEventHelper dpwEventHelper;
-
-    public TransactionPropertyServiceImpl(TransactionPropertiesRepository transactionPropertiesRepository,
-                                          DpwEventHelper dpwEventHelper) {
-        this.transactionPropertiesRepository = transactionPropertiesRepository;
-        this.dpwEventHelper = dpwEventHelper;
-    }
-
-    @Override
-    public List<String> getPropertyNamesByEventIdAndType(String eventId, String propertyType) {
-        List<EventTransactionPropertiesEntity> eventTxnProps =
-                transactionPropertiesRepository.findByEventIdAndPropertyType(eventId, propertyType);
-
-        if (eventTxnProps.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        List<Long> transactionPropertyIds = eventTxnProps.stream()
-                .map(EventTransactionPropertiesEntity::getTransactionPropertyId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
-
-        if (transactionPropertyIds.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        List<TransactionalProperty> transactionProperties = dpwEventHelper.getTransactionPropertiesFromRef(
-                transactionPropertyIds.stream().map(String::valueOf).collect(Collectors.joining(","))
-        );
-
-        if (transactionProperties == null || transactionProperties.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        return transactionProperties.stream()
-                .map(TransactionalProperty::getPropertyName)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
-    }
-
-    // Other methods remain unchanged
-}
-
-
----
-
-✅ 3. DpwEventExportDTO.java
-
-Add only this field to the class:
-
-// ✅ New field added for export
-private String transactionPropertyName;
-
-If you're using annotation-based Excel generation (like EasyPOI or custom helper), add:
-
-@ExcelColumn(name = "Transaction Properties")
-private String transactionPropertyName;
-
-
----
-
-✅ 4. RequestController.java → inside exportEvents() method
-
-Find your loop that iterates eventExportDtoList and update it like this:
-
-for (DpwEventExportDTO dto : eventExportDtoList) {
-    setSystemSpecificDateTimeForEvent(dto, timeZone);
-
-    // ✅ Get Transaction Properties by Event ID and Property Type
-    List<String> propertyNames = transactionPropertyService.getPropertyNamesByEventIdAndType(
-        dto.getId(), "COMPLETION_MOTIVE"
+getPropertyNamesByEventIdAndType(eventId: string, propertyType: string): Observable<string[]> {
+  return this.transactionPropertyService
+    .getPropertyNamesByEventIdAndType(
+      getBranchCodeFromId(eventId),
+      getCountryCodeFromId(eventId),
+      'BNPPUID', // use actual user ID dynamically if available
+      eventId,
+      propertyType
+    )
+    .pipe(
+      switchMap((response: string[]) => {
+        const propertyNames = _.compact(response); // remove nulls
+        const sorted = _.sortBy(propertyNames); // default string sort
+        return of(sorted);
+      })
     );
-
-    // ✅ Join all names and set in DTO for Excel
-    String joinedPropertyNames = propertyNames.isEmpty() ? null : String.join(", ", propertyNames);
-    dto.setTransactionPropertyName(joinedPropertyNames);
 }
-
-
----
-
-✅ That's It
-
-These changes are all you need to:
-
-Fetch multiple transaction properties using event ID + type.
-
-Join them as a string.
-
-Inject into the export DTO.
-
-Output to Excel in the "Transaction Properties" column.
-
-
-Let me know if you want help generating mock/test data for this.
