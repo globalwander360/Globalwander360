@@ -1,304 +1,143 @@
-@Override
-public List<String> getPropertyNamesByEventIdAndType(String eventId, String propertyType) {
-    List<EventTransactionPropertiesEntity> eventTxnProps = transactionPropertiesRepository
-            .findByEventIdAndPropertyType(eventId, propertyType);
+Perfect! Below is the full updated source code with only the changes related to TransactionProperty integration for Excel export. I’ve excluded unrelated parts and kept only what’s needed to support your requirement:
 
-    if (eventTxnProps.isEmpty()) {
-        return Collections.emptyList();
-    }
 
-    // Step 2: Extract transactionPropertyIds
-    List<Long> transactionPropertyIds = eventTxnProps.stream()
-            .map(EventTransactionPropertiesEntity::getTransactionPropertyId)
-            .filter(Objects::nonNull)
-            .distinct()
-            .collect(Collectors.toList());
+---
 
-    if (transactionPropertyIds.isEmpty()) {
-        return Collections.emptyList();
-    }
+✅ 1. TransactionPropertyService.java
 
-    // Step 3: Get transaction properties from helper
-    List<TransactionalProperty> transactionProperties =
-            dpwEventHelper.getTransactionPropertiesFromRef(String.valueOf(transactionPropertyIds));
+package com.bnpparibas.dpw.service;
 
-    if (transactionProperties == null || transactionProperties.isEmpty()) {
-        return Collections.emptyList();
-    }
+import com.bnpparibas.dpw.controller.model.TransactionProperty;
 
-    // Step 4: Extract property names directly
-    List<String> propertyNames = transactionProperties.stream()
-            .map(TransactionalProperty::getPropertyName)
-            .filter(Objects::nonNull)
-            .distinct()
-            .collect(Collectors.toList());
+import java.util.List;
 
-    return propertyNames;
-}
+public interface TransactionPropertyService {
 
-// Add this new method to get single property name for a specific event
-@Override
-public String getPropertyNameByEventIdAndType(String eventId, String propertyType) {
-    List<String> propertyNames = getPropertyNamesByEventIdAndType(eventId, propertyType);
-    
-    // Return the first property name if available, otherwise return null or empty string
-    return propertyNames.isEmpty() ? null : propertyNames.get(0);
+    TransactionProperty createTransactionProperty(String bnppuid, TransactionProperty body, String stepName, boolean isManualUpdate, String branchCode, String countryCode);
+
+    TransactionProperty getTransactionPropertyList(String bnppuid, String eventId, String mfr, String branchCode, String countryCode, Boolean isLightWeight);
+
+    TransactionProperty updateTransactionProperty(String bnppuid, TransactionProperty body, String stepName, String eventId, String mfr, String branchCode, String countryCode);
+
+    // ✅ Added for Excel Export
+    List<String> getPropertyNamesByEventIdAndType(String eventId, String propertyType);
 }
 
 
+---
 
-@Override
-@PreAuthorize("hasOpsPermission(#branchCode, null, 'ReadEvent')")
-public ResponseEntity<byte[]> exportEvents(String branchCode, String bnppuid, String countryCode, 
-        String acceptLanguage, String q, Integer skip, Integer take, String orderBy, 
-        SortDirection direction, String timezone, Export export) {
+✅ 2. TransactionPropertyServiceImpl.java
 
-    ArrayList<String> fields = getAllFieldsSimpleNames(EventEntity.class);
+package com.bnpparibas.dpw.service.impl;
 
-    RsqlSearchCriteria rsqlSearchCriteria = new RsqlSearchCriteria();
-    rsqlSearchCriteria.setPgpeCodes(export.getPgpeCodes());
+import com.bnpparibas.dpw.controller.model.TransactionProperty;
+import com.bnpparibas.dpw.entity.EventTransactionPropertiesEntity;
+import com.bnpparibas.dpw.external.model.TransactionalProperty;
+import com.bnpparibas.dpw.repository.TransactionPropertiesRepository;
+import com.bnpparibas.dpw.service.TransactionPropertyService;
+import com.bnpparibas.dpw.util.DpwEventHelper;
 
-    if (!fields.contains(orderBy))
-        orderBy = null;
+import org.springframework.stereotype.Service;
 
-    final PageRequest pageRequest = ControllerUtils.createPageRequest(skip, exportLimit, orderBy, 
-            defaultOrder: "id", direction);
+import java.util.*;
+import java.util.stream.Collectors;
 
-    List<DpwEventExportDTO> eventExportDtoList;
-    EventListsPage eventListsPage;
+@Service
+public class TransactionPropertyServiceImpl implements TransactionPropertyService {
 
-    try {
-        eventListsPage = eventService.filterEvents(q, pageRequest, bnppuid, exportFile: true, 
-                customQueueCount: null, branchCode, countryCode, rsqlSearchCriteria);
+    private final TransactionPropertiesRepository transactionPropertiesRepository;
+    private final DpwEventHelper dpwEventHelper;
 
-        eventExportDtoList = eventMapper.mapToEventExportDtoList(eventListsPage.getResults());
+    public TransactionPropertyServiceImpl(TransactionPropertiesRepository transactionPropertiesRepository,
+                                          DpwEventHelper dpwEventHelper) {
+        this.transactionPropertiesRepository = transactionPropertiesRepository;
+        this.dpwEventHelper = dpwEventHelper;
+    }
 
-        // Populate transaction property names for each event
-        for (DpwEventExportDTO dpwEventExportDTO : eventExportDtoList) {
-            setSystemSpecificDateTimeForEvent(dpwEventExportDTO, timezone);
-            
-            // Get and set transaction property name for this specific event
-            String propertyName = translationPropertiesService.getPropertyNameByEventIdAndType(
-                    dpwEventExportDTO.getId(), // Assuming getId() returns the event ID
-                    "YOUR_PROPERTY_TYPE" // Replace with your actual property type
-            );
-            dpwEventExportDTO.setTransactionpropertyname(propertyName);
+    @Override
+    public List<String> getPropertyNamesByEventIdAndType(String eventId, String propertyType) {
+        List<EventTransactionPropertiesEntity> eventTxnProps =
+                transactionPropertiesRepository.findByEventIdAndPropertyType(eventId, propertyType);
+
+        if (eventTxnProps.isEmpty()) {
+            return Collections.emptyList();
         }
-    } catch (Exception e) {
-        log.error("Export events error:", e);
-        Thread.currentThread().interrupt();
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-    }
 
-    try {
-        ExcelExportHelper<DpwEventExportDTO> excelExportHelper = new ExcelExportHelper<>(eventExportDtoList,
-                DpwEventExportDTO.class, getFormattedDateColumn(export.getColumns()), export.getExcelHeaders());
+        List<Long> transactionPropertyIds = eventTxnProps.stream()
+                .map(EventTransactionPropertiesEntity::getTransactionPropertyId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
 
-        ByteArrayOutputStream bos = excelExportHelper.createFileContent(eventListsPage.getExcelCount());
-        HttpHeaders responseHeaders = excelExportHelper.generateHttpHeaders(bos);
-
-        return new ResponseEntity<>(bos.toByteArray(), responseHeaders, HttpStatus.OK);
-
-    } catch (IOException e) {
-        log.error("exportEvents error:", e);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-    }
-}
-
-
-
-public class DPWEventExportDTO {
-    private String id; // Event ID
-    private String transactionpropertyname;
-    
-    // Other existing fields...
-    
-    // Constructors
-    public DPWEventExportDTO() {}
-    
-    // Getters and Setters
-    public String getId() {
-        return id;
-    }
-    
-    public void setId(String id) {
-        this.id = id;
-    }
-    
-    public String getTransactionpropertyname() {
-        return transactionpropertyname;
-    }
-    
-    public void setTransactionpropertyname(String transactionpropertyname) {
-        this.transactionpropertyname = transactionpropertyname;
-    }
-    
-    // Other existing getters and setters...
-}
-
-
-// Add this method to your TranslationPropertiesService interface
-
-public interface TranslationPropertiesService {
-    
-    // Existing method
-    public List<String> getPropertyNamesByEventIdAndType(String eventId, String propertyType);
-    
-    // New method to get single property name
-    public String getPropertyNameByEventIdAndType(String eventId, String propertyType);
-    
-    // Other existing methods...
-}
-
-
-
-
-
-// Most optimized version using the new repository method
-@Override
-public String getPropertyNameByEventIdAndType(String eventId, String propertyType) {
-    // Step 1: Get the first matching EventTransactionPropertiesEntity using optimized query
-    Optional<EventTransactionPropertiesEntity> eventTxnPropOptional = 
-            transactionPropertiesRepository.findFirstByEventIdAndPropertyType(eventId, propertyType);
-
-    if (!eventTxnPropOptional.isPresent()) {
-        return null;
-    }
-
-    EventTransactionPropertiesEntity eventTxnProp = eventTxnPropOptional.get();
-    Long transactionPropertyId = eventTxnProp.getTransactionPropertyId();
-    
-    if (transactionPropertyId == null) {
-        return null;
-    }
-
-    // Step 2: Get transaction property from helper (single ID)
-    List<TransactionalProperty> transactionProperties =
-            dpwEventHelper.getTransactionPropertiesFromRef(String.valueOf(transactionPropertyId));
-
-    if (transactionProperties == null || transactionProperties.isEmpty()) {
-        return null;
-    }
-
-    // Step 3: Return the property name
-    TransactionalProperty property = transactionProperties.get(0);
-    return property != null ? property.getPropertyName() : null;
-}
-
-// Keep the original method for backward compatibility if needed
-@Override
-public List<String> getPropertyNamesByEventIdAndType(String eventId, String propertyType) {
-    List<EventTransactionPropertiesEntity> eventTxnProps = transactionPropertiesRepository
-            .findByEventIdAndPropertyType(eventId, propertyType);
-
-    if (eventTxnProps.isEmpty()) {
-        return Collections.emptyList();
-    }
-
-    // Step 2: Extract transactionPropertyIds
-    List<Long> transactionPropertyIds = eventTxnProps.stream()
-            .map(EventTransactionPropertiesEntity::getTransactionPropertyId)
-            .filter(Objects::nonNull)
-            .distinct()
-            .collect(Collectors.toList());
-
-    if (transactionPropertyIds.isEmpty()) {
-        return Collections.emptyList();
-    }
-
-    // Step 3: Get transaction properties from helper
-    List<TransactionalProperty> transactionProperties =
-            dpwEventHelper.getTransactionPropertiesFromRef(String.valueOf(transactionPropertyIds));
-
-    if (transactionProperties == null || transactionProperties.isEmpty()) {
-        return Collections.emptyList();
-    }
-
-    // Step 4: Extract property names directly
-    List<String> propertyNames = transactionProperties.stream()
-            .map(TransactionalProperty::getPropertyName)
-            .filter(Objects::nonNull)
-            .distinct()
-            .collect(Collectors.toList());
-
-    return propertyNames;
-}
-
-
-@Override
-@PreAuthorize("hasOpsPermission(#branchCode, null, 'ReadEvent')")
-public ResponseEntity<byte[]> exportEvents(String branchCode, String bnppuid, String countryCode, 
-        String acceptLanguage, String q, Integer skip, Integer take, String orderBy, 
-        SortDirection direction, String timezone, Export export) {
-
-    ArrayList<String> fields = getAllFieldsSimpleNames(EventEntity.class);
-
-    RsqlSearchCriteria rsqlSearchCriteria = new RsqlSearchCriteria();
-    rsqlSearchCriteria.setPgpeCodes(export.getPgpeCodes());
-
-    if (!fields.contains(orderBy))
-        orderBy = null;
-
-    final PageRequest pageRequest = ControllerUtils.createPageRequest(skip, exportLimit, orderBy, 
-            defaultOrder: "id", direction);
-
-    List<DpwEventExportDTO> eventExportDtoList;
-    EventListsPage eventListsPage;
-
-    try {
-        eventListsPage = eventService.filterEvents(q, pageRequest, bnppuid, exportFile: true, 
-                customQueueCount: null, branchCode, countryCode, rsqlSearchCriteria);
-
-        eventExportDtoList = eventMapper.mapToEventExportDtoList(eventListsPage.getResults());
-
-        // Populate transaction property names for each event
-        for (DpwEventExportDTO dpwEventExportDTO : eventExportDtoList) {
-            setSystemSpecificDateTimeForEvent(dpwEventExportDTO, timezone);
-            
-            // Get and set transaction property name for this specific event
-            // This will return only ONE property name per event based on eventId and propertyType
-            String propertyName = translationPropertiesService.getPropertyNameByEventIdAndType(
-                    dpwEventExportDTO.getId(), // Event ID
-                    "YOUR_PROPERTY_TYPE" // Replace with your actual property type like "TRANSACTION", "PAYMENT", etc.
-            );
-            
-            // Set the property name (will be null if no match found)
-            dpwEventExportDTO.setTransactionpropertyname(propertyName);
+        if (transactionPropertyIds.isEmpty()) {
+            return Collections.emptyList();
         }
-    } catch (Exception e) {
-        log.error("Export events error:", e);
-        Thread.currentThread().interrupt();
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+
+        List<TransactionalProperty> transactionProperties = dpwEventHelper.getTransactionPropertiesFromRef(
+                transactionPropertyIds.stream().map(String::valueOf).collect(Collectors.joining(","))
+        );
+
+        if (transactionProperties == null || transactionProperties.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        return transactionProperties.stream()
+                .map(TransactionalProperty::getPropertyName)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
     }
 
-    try {
-        ExcelExportHelper<DpwEventExportDTO> excelExportHelper = new ExcelExportHelper<>(eventExportDtoList,
-                DpwEventExportDTO.class, getFormattedDateColumn(export.getColumns()), export.getExcelHeaders());
-
-        ByteArrayOutputStream bos = excelExportHelper.createFileContent(eventListsPage.getExcelCount());
-        HttpHeaders responseHeaders = excelExportHelper.generateHttpHeaders(bos);
-
-        return new ResponseEntity<>(bos.toByteArray(), responseHeaders, HttpStatus.OK);
-
-    } catch (IOException e) {
-        log.error("exportEvents error:", e);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-    }
+    // Other methods remain unchanged
 }
 
 
+---
 
-// Add this method to your TransactionPropertiesRepository interface
+✅ 3. DpwEventExportDTO.java
 
-public interface TransactionPropertiesRepository extends JpaRepository<EventTransactionPropertiesEntity, Long> {
-    
-    // Existing method
-    List<EventTransactionPropertiesEntity> findByEventIdAndPropertyType(String eventId, String propertyType);
-    
-    // New optimized method to get only the first result
-    @Query("SELECT e FROM EventTransactionPropertiesEntity e WHERE e.eventId = :eventId AND e.propertyType = :propertyType ORDER BY e.id ASC")
-    Optional<EventTransactionPropertiesEntity> findFirstByEventIdAndPropertyType(@Param("eventId") String eventId, @Param("propertyType") String propertyType);
+Add only this field to the class:
+
+// ✅ New field added for export
+private String transactionPropertyName;
+
+If you're using annotation-based Excel generation (like EasyPOI or custom helper), add:
+
+@ExcelColumn(name = "Transaction Properties")
+private String transactionPropertyName;
+
+
+---
+
+✅ 4. RequestController.java → inside exportEvents() method
+
+Find your loop that iterates eventExportDtoList and update it like this:
+
+for (DpwEventExportDTO dto : eventExportDtoList) {
+    setSystemSpecificDateTimeForEvent(dto, timeZone);
+
+    // ✅ Get Transaction Properties by Event ID and Property Type
+    List<String> propertyNames = transactionPropertyService.getPropertyNamesByEventIdAndType(
+        dto.getId(), "COMPLETION_MOTIVE"
+    );
+
+    // ✅ Join all names and set in DTO for Excel
+    String joinedPropertyNames = propertyNames.isEmpty() ? null : String.join(", ", propertyNames);
+    dto.setTransactionPropertyName(joinedPropertyNames);
 }
 
 
+---
 
+✅ That's It
+
+These changes are all you need to:
+
+Fetch multiple transaction properties using event ID + type.
+
+Join them as a string.
+
+Inject into the export DTO.
+
+Output to Excel in the "Transaction Properties" column.
+
+
+Let me know if you want help generating mock/test data for this.
