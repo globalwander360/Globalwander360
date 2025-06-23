@@ -1,31 +1,14 @@
-// Step 1: Fetch all event results
-eventListsPage = eventService.filterEvents(q, pageRequest, bnppuid, true, null, branchCode, countryCode, rsqlSearchCriteria);
-eventExportDtoList = eventMapper.mapToEventExportDtoList(eventListsPage.getResults());
+@Override
+public List<Long> getPropertyIdsByEventIdAndType(String bnppuid, String branchCode, String countryCode, String eventId, String propertyType) {
+    // Step 1: Get list of matching transactionPropertyIds
+    List<Long> transactionPropertyIds = transactionPropertiesRepository
+            .getPropertyIdsByEventIdAndType(eventId, propertyType);
 
-// Step 2: Cache all transaction properties once from DPW helper
-List<TransactionalProperty> transactionProperties = dpwEventHelper.getTransactionPropertiesFromRef(bnppuid);
+    // Return empty list if none found
+    if (transactionPropertyIds.isEmpty()) {
+        return Collections.emptyList();
+    }
 
-// Step 3: Build Map<transactionPropertyId, propertyName>
-Map<Long, String> propertyIdNameMap = transactionProperties.stream()
-        .filter(prop -> prop.getPropertyName() != null)
-        .collect(Collectors.toMap(TransactionalProperty::getId, TransactionalProperty::getPropertyName));
-
-// Step 4: For each DTO, populate the joined property names
-for (DpwEventExportDTO dpwEventExportDTO : eventExportDtoList) {
-
-    setSystemSpecificDateTimeForEvent(dpwEventExportDTO, timeZone);
-
-    // Get list of property IDs for this event and type
-    List<Long> propertyIds = transactionPropertyService
-            .getPropertyIdsByEventIdAndType(bnppuid, branchCode, countryCode, dpwEventExportDTO.getId(), "COMPLETION_MOTIVE");
-
-    // Map IDs to names using cached map
-    List<String> propertyNames = propertyIds.stream()
-            .map(propertyIdNameMap::get) // safe even if missing
-            .filter(Objects::nonNull)
-            .collect(Collectors.toList());
-
-    // Join names and set
-    String joinedPropertyNames = propertyNames.isEmpty() ? null : String.join(",", propertyNames);
-    dpwEventExportDTO.setTransationPropertyName(joinedPropertyNames);
+    // Step 2: Return the list of IDs only (no helper call here)
+    return transactionPropertyIds;
 }
