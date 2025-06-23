@@ -1,37 +1,34 @@
 @Override
-public List<String> getPropertyNamesByEventIdAndType(String eventId, String propertyType) {
-    try {
-        // Get all matching EventTransactionProperties entities
-        List<EventTransactionPropertiesEntity> eventTxnProps = 
-                transactionPropertiesRepository.findAllByEventIdAndPropertyType(eventId, propertyType);
-        
-        if (eventTxnProps.isEmpty()) {
-            return new ArrayList<>();
-        }
-        
-        List<String> propertyNames = new ArrayList<>();
-        
-        for (EventTransactionPropertiesEntity eventTxnProp : eventTxnProps) {
-            Long transactionPropertyId = eventTxnProp.getTransactionPropertyId();
-            
-            if (transactionPropertyId != null) {
-                List<TransactionalProperty> transactionProperties = 
-                        dpwEventHelper.getTransactionPropertiesFromRef(String.valueOf(transactionPropertyId));
-                
-                if (transactionProperties != null && !transactionProperties.isEmpty()) {
-                    for (TransactionalProperty property : transactionProperties) {
-                        if (property != null && property.getPropertyName() != null) {
-                            propertyNames.add(property.getPropertyName());
-                        }
-                    }
-                }
-            }
-        }
-        
-        return propertyNames;
-        
-    } catch (Exception e) {
-        log.error("Error fetching property names for eventId: {} and propertyType: {}", eventId, propertyType, e);
-        return new ArrayList<>();
+public List<String> getPropertyNamesByEventIdAndType(
+        String bnppuid,
+        String branchCode,
+        String countryCode,
+        String eventId,
+        String propertyType) {
+
+    // Step 1: Directly fetch IDs (not full entity)
+    List<Long> transactionPropertyIds =
+            transactionPropertiesRepository.findTransactionPropertyIdsByEventIdAndPropertyType(eventId, propertyType);
+
+    if (transactionPropertyIds.isEmpty()) {
+        return Collections.emptyList();
     }
+
+    // Step 2: Fetch full TransactionalProperty using helper
+    List<TransactionalProperty> transactionProperties = dpwEventHelper.getTransactionPropertiesFromRef(
+            transactionPropertyIds.stream()
+                    .map(String::valueOf)
+                    .collect(Collectors.joining(","))
+    );
+
+    // Step 3: Extract property names
+    return transactionProperties.stream()
+            .map(TransactionalProperty::getPropertyName)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toList());
 }
+
+
+
+@Query("SELECT e.transactionPropertyId FROM EventTransactionPropertiesEntity e WHERE e.eventId = :eventId AND e.propertyType = :propertyType")
+List<Long> findTransactionPropertyIdsByEventIdAndPropertyType(@Param("eventId") String eventId, @Param("propertyType") String propertyType);
