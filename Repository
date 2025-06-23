@@ -1,17 +1,5 @@
-getPropertyNamesByEventIdAndType(eventId: string, propertyType: string): Observable<string[]> {
-  return this.transactionPropertyService
-    .getPropertyNamesByEventIdAndType(
-      getBranchCodeFromId(eventId),
-      getCountryCodeFromId(eventId),
-      'BNPPUID', // use actual user ID dynamically if available
-      eventId,
-      propertyType
-    )
-    .pipe(
-      switchMap((response: string[]) => {
-        const propertyNames = _.compact(response); // remove nulls
-        const sorted = _.sortBy(propertyNames); // default string sort
-        return of(sorted);
-      })
-    );
-}
+@Query("SELECT e.transactionPropertyId FROM EventTransactionPropertiesEntity e WHERE e.eventId = :eventId AND e.propertyType = :propertyType ORDER BY e.id ASC")
+List<Long> findTxnPropertyIdsByEventIdAndPropertyType(
+    @Param("eventId") String eventId,
+    @Param("propertyType") String propertyType
+);
