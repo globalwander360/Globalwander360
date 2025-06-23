@@ -1,5 +1,12 @@
-@Query("SELECT e.transactionPropertyId FROM EventTransactionPropertiesEntity e WHERE e.eventId = :eventId AND e.propertyType = :propertyType ORDER BY e.id ASC")
-List<Long> findTxnPropertyIdsByEventIdAndPropertyType(
-    @Param("eventId") String eventId,
-    @Param("propertyType") String propertyType
-);
+@Override
+public String getPropertyNameByEventIdAndType(String eventId, String propertyType) {
+    return transactionPropertiesRepository.findFirstByEventIdAndPropertyType(eventId, propertyType)
+        .map(EventTransactionPropertiesEntity::getTransactionPropertyId)
+        .filter(Objects::nonNull)
+        .map(String::valueOf)
+        .map(dpwEventHelper::getTransactionPropertiesFromRef)
+        .filter(Objects::nonNull)
+        .flatMap(properties -> properties.stream().findFirst())
+        .map(TransactionalProperty::getPropertyName)
+        .orElse(null);
+}
