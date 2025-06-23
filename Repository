@@ -1,12 +1,37 @@
 @Override
-public String getPropertyNameByEventIdAndType(String eventId, String propertyType) {
-    return transactionPropertiesRepository.findFirstByEventIdAndPropertyType(eventId, propertyType)
-        .map(EventTransactionPropertiesEntity::getTransactionPropertyId)
-        .filter(Objects::nonNull)
-        .map(String::valueOf)
-        .map(dpwEventHelper::getTransactionPropertiesFromRef)
-        .filter(Objects::nonNull)
-        .flatMap(properties -> properties.stream().findFirst())
-        .map(TransactionalProperty::getPropertyName)
-        .orElse(null);
+public List<String> getPropertyNamesByEventIdAndType(String eventId, String propertyType) {
+    try {
+        // Get all matching EventTransactionProperties entities
+        List<EventTransactionPropertiesEntity> eventTxnProps = 
+                transactionPropertiesRepository.findAllByEventIdAndPropertyType(eventId, propertyType);
+        
+        if (eventTxnProps.isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        List<String> propertyNames = new ArrayList<>();
+        
+        for (EventTransactionPropertiesEntity eventTxnProp : eventTxnProps) {
+            Long transactionPropertyId = eventTxnProp.getTransactionPropertyId();
+            
+            if (transactionPropertyId != null) {
+                List<TransactionalProperty> transactionProperties = 
+                        dpwEventHelper.getTransactionPropertiesFromRef(String.valueOf(transactionPropertyId));
+                
+                if (transactionProperties != null && !transactionProperties.isEmpty()) {
+                    for (TransactionalProperty property : transactionProperties) {
+                        if (property != null && property.getPropertyName() != null) {
+                            propertyNames.add(property.getPropertyName());
+                        }
+                    }
+                }
+            }
+        }
+        
+        return propertyNames;
+        
+    } catch (Exception e) {
+        log.error("Error fetching property names for eventId: {} and propertyType: {}", eventId, propertyType, e);
+        return new ArrayList<>();
+    }
 }
