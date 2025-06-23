@@ -1,14 +1,12 @@
-@Override
-public List<Long> getPropertyIdsByEventIdAndType(String bnppuid, String branchCode, String countryCode, String eventId, String propertyType) {
-    // Step 1: Get list of matching transactionPropertyIds
-    List<Long> transactionPropertyIds = transactionPropertiesRepository
-            .getPropertyIdsByEventIdAndType(eventId, propertyType);
+Subject: Clarification on Unused API for Transaction Properties
 
-    // Return empty list if none found
-    if (transactionPropertyIds.isEmpty()) {
-        return Collections.emptyList();
-    }
+Hi
 
-    // Step 2: Return the list of IDs only (no helper call here)
-    return transactionPropertyIds;
-}
+I had previously developed an API to access Transaction Properties. However, based on suggestions from Bhavin and Amit, I’ve implemented a caching mechanism using referential data, which is now working properly.
+
+Currently, the API is not being used. I wanted to check with you — should I keep this API in the codebase for potential future use, or would you prefer that I remove it for now?
+
+Please let me know how you'd like me to proceed.
+
+Best regards,
+Harish
