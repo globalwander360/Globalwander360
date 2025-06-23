@@ -1,34 +1,31 @@
-@Override
-public List<String> getPropertyNamesByEventIdAndType(
-        String bnppuid,
-        String branchCode,
-        String countryCode,
-        String eventId,
-        String propertyType) {
+// Step 1: Fetch all event results
+eventListsPage = eventService.filterEvents(q, pageRequest, bnppuid, true, null, branchCode, countryCode, rsqlSearchCriteria);
+eventExportDtoList = eventMapper.mapToEventExportDtoList(eventListsPage.getResults());
 
-    // Step 1: Directly fetch IDs (not full entity)
-    List<Long> transactionPropertyIds =
-            transactionPropertiesRepository.findTransactionPropertyIdsByEventIdAndPropertyType(eventId, propertyType);
+// Step 2: Cache all transaction properties once from DPW helper
+List<TransactionalProperty> transactionProperties = dpwEventHelper.getTransactionPropertiesFromRef(bnppuid);
 
-    if (transactionPropertyIds.isEmpty()) {
-        return Collections.emptyList();
-    }
+// Step 3: Build Map<transactionPropertyId, propertyName>
+Map<Long, String> propertyIdNameMap = transactionProperties.stream()
+        .filter(prop -> prop.getPropertyName() != null)
+        .collect(Collectors.toMap(TransactionalProperty::getId, TransactionalProperty::getPropertyName));
 
-    // Step 2: Fetch full TransactionalProperty using helper
-    List<TransactionalProperty> transactionProperties = dpwEventHelper.getTransactionPropertiesFromRef(
-            transactionPropertyIds.stream()
-                    .map(String::valueOf)
-                    .collect(Collectors.joining(","))
-    );
+// Step 4: For each DTO, populate the joined property names
+for (DpwEventExportDTO dpwEventExportDTO : eventExportDtoList) {
 
-    // Step 3: Extract property names
-    return transactionProperties.stream()
-            .map(TransactionalProperty::getPropertyName)
+    setSystemSpecificDateTimeForEvent(dpwEventExportDTO, timeZone);
+
+    // Get list of property IDs for this event and type
+    List<Long> propertyIds = transactionPropertyService
+            .getPropertyIdsByEventIdAndType(bnppuid, branchCode, countryCode, dpwEventExportDTO.getId(), "COMPLETION_MOTIVE");
+
+    // Map IDs to names using cached map
+    List<String> propertyNames = propertyIds.stream()
+            .map(propertyIdNameMap::get) // safe even if missing
             .filter(Objects::nonNull)
             .collect(Collectors.toList());
+
+    // Join names and set
+    String joinedPropertyNames = propertyNames.isEmpty() ? null : String.join(",", propertyNames);
+    dpwEventExportDTO.setTransationPropertyName(joinedPropertyNames);
 }
-
-
-
-@Query("SELECT e.transactionPropertyId FROM EventTransactionPropertiesEntity e WHERE e.eventId = :eventId AND e.propertyType = :propertyType")
-List<Long> findTransactionPropertyIdsByEventIdAndPropertyType(@Param("eventId") String eventId, @Param("propertyType") String propertyType);
