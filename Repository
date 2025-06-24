@@ -1,12 +1,52 @@
-Subject: Clarification on Unused API for Transaction Properties
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
-Hi
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
-I had previously developed an API to access Transaction Properties. However, based on suggestions from Bhavin and Amit, I’ve implemented a caching mechanism using referential data, which is now working properly.
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
-Currently, the API is not being used. I wanted to check with you — should I keep this API in the codebase for potential future use, or would you prefer that I remove it for now?
+public class TransactionPropertyServiceTest {
 
-Please let me know how you'd like me to proceed.
+    @Mock
+    private TransactionPropertiesRepository transactionPropertiesRepository;
 
-Best regards,
-Harish
+    @InjectMocks
+    private TransactionPropertyServiceImpl transactionPropertyService;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    void testGetPropertyNamesByEventIdAndType() {
+        String eventId = "EVT123";
+        String propertyType = "TYPE1";
+
+        // Case 1: Non-empty list
+        List<Long> expectedIds = Arrays.asList(1L, 2L, 3L);
+        when(transactionPropertiesRepository.getPropertyNamesByEventIdAndType(eventId, propertyType))
+                .thenReturn(expectedIds);
+
+        List<Long> result = transactionPropertyService.getPropertyNamesByEventIdAndType("user1", "BR01", "IN", eventId, propertyType);
+
+        assertNotNull(result);
+        assertEquals(3, result.size());
+        assertEquals(expectedIds, result);
+
+        // Case 2: Empty list
+        when(transactionPropertiesRepository.getPropertyNamesByEventIdAndType("EVT_EMPTY", propertyType))
+                .thenReturn(Collections.emptyList());
+
+        List<Long> emptyResult = transactionPropertyService.getPropertyNamesByEventIdAndType("user2", "BR02", "US", "EVT_EMPTY", propertyType);
+
+        assertNotNull(emptyResult);
+        assertTrue(emptyResult.isEmpty());
+    }
+}
