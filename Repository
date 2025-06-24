@@ -1,52 +1,24 @@
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+Sure! Here's your farewell speech for Neha in English, keeping it sincere and respectful:
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+---
 
-public class TransactionPropertyServiceTest {
+Farewell Speech for Neha
 
-    @Mock
-    private TransactionPropertiesRepository transactionPropertiesRepository;
+Good afternoon everyone,
 
-    @InjectMocks
-    private TransactionPropertyServiceImpl transactionPropertyService;
+Today is a bit emotional as we bid farewell to Neha. Honestly, I didn't have a lot of interaction with her, but whatever little I did was truly valuable.
 
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
-    }
+I especially want to mention the training sessions that Neha conducted. They were clear, patient, and genuinely helpful. Her way of explaining things was simple yet very effective, and those sessions really helped me personally. When someone’s work quietly leaves an impact, it stays with you — and Neha is definitely one of those people.
 
-    @Test
-    void testGetPropertyNamesByEventIdAndType() {
-        String eventId = "EVT123";
-        String propertyType = "TYPE1";
+Neha, your calm and composed nature, along with your dedication, has always been inspiring. I’m sure you’ll do amazingly well in your next journey.
 
-        // Case 1: Non-empty list
-        List<Long> expectedIds = Arrays.asList(1L, 2L, 3L);
-        when(transactionPropertiesRepository.getPropertyNamesByEventIdAndType(eventId, propertyType))
-                .thenReturn(expectedIds);
+Wishing you all the very best for your future. We’ll definitely miss you and your guidance.
 
-        List<Long> result = transactionPropertyService.getPropertyNamesByEventIdAndType("user1", "BR01", "IN", eventId, propertyType);
+Thank you!
 
-        assertNotNull(result);
-        assertEquals(3, result.size());
-        assertEquals(expectedIds, result);
 
-        // Case 2: Empty list
-        when(transactionPropertiesRepository.getPropertyNamesByEventIdAndType("EVT_EMPTY", propertyType))
-                .thenReturn(Collections.emptyList());
+---
 
-        List<Long> emptyResult = transactionPropertyService.getPropertyNamesByEventIdAndType("user2", "BR02", "US", "EVT_EMPTY", propertyType);
+Let me know if you'd like a shorter version or want to make it more casual or personal.
 
-        assertNotNull(emptyResult);
-        assertTrue(emptyResult.isEmpty());
-    }
-}
