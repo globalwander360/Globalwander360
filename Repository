@@ -1,24 +1,24 @@
-Sure! Here's your farewell speech for Neha in English, keeping it sincere and respectful:
+it('should handle transaction properties correctly and call onLoad', (done) => {
+  const data = { id: 'event-001' };
+  const keys = ['key1', 'key2'];
+  const mockTransactionProperties = [
+    { propertyType: 'COMPLETION_MOTIVE', propertyName: 'A' },
+    { propertyType: 'COMPLETION_MOTIVE', propertyName: 'B' },
+    { propertyType: 'OTHER', propertyName: 'Ignore' }
+  ];
 
+  jest.spyOn(component as any, 'getThrowbacks').mockReturnValue(of(true));
+  jest.spyOn(initiationEventDataService, 'getTransactionPropertiesByEventId')
+    .mockReturnValue(of(mockTransactionProperties));
+  const onLoadSpy = jest.spyOn(component as any, 'onLoad');
 
----
+  component.handleGetTransactionProperties(data, keys);
 
-Farewell Speech for Neha
-
-Good afternoon everyone,
-
-Today is a bit emotional as we bid farewell to Neha. Honestly, I didn't have a lot of interaction with her, but whatever little I did was truly valuable.
-
-I especially want to mention the training sessions that Neha conducted. They were clear, patient, and genuinely helpful. Her way of explaining things was simple yet very effective, and those sessions really helped me personally. When someone’s work quietly leaves an impact, it stays with you — and Neha is definitely one of those people.
-
-Neha, your calm and composed nature, along with your dedication, has always been inspiring. I’m sure you’ll do amazingly well in your next journey.
-
-Wishing you all the very best for your future. We’ll definitely miss you and your guidance.
-
-Thank you!
-
-
----
-
-Let me know if you'd like a shorter version or want to make it more casual or personal.
-
+  setTimeout(() => {
+    expect(onLoadSpy).toHaveBeenCalledWith({
+      ...data,
+      transationPropertyName: 'A,B'
+    });
+    done();
+  }, 0);
+});
