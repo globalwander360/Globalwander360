@@ -2,24 +2,35 @@
 void testGetAlertReminderForTreeViewByEventId() {
     String eventId = "event1234";
 
-    AlertEntity alertEntity = new AlertEntity(); // or populate fields as needed
+    AlertEntity alertEntity = new AlertEntity(); // set properties if needed
     ReminderEntity reminderEntity = new ReminderEntity();
 
     given(dpwEventHelper.getEventAlertsFuture(eventId))
-        .willReturn(CompletableFuture.completedFuture(Lists.newArrayList(alertEntity)));
+        .willReturn(CompletableFuture.completedFuture(List.of(alertEntity)));
 
     given(dpwEventHelper.getEventReminderFuture(eventId))
-        .willReturn(CompletableFuture.completedFuture(Lists.newArrayList(reminderEntity)));
+        .willReturn(CompletableFuture.completedFuture(List.of(reminderEntity)));
 
     AlertReminderDetail alertReminderDetail = new AlertReminderDetail();
     alertReminderDetail.setCreationDate(LocalDateTime.now());
 
+    // ✅ Correct single-arg stubbing
     given(dpwEventHelper.getAlertReminderDetail(any(AlertEntity.class)))
         .willReturn(alertReminderDetail);
 
     TreeviewAlertReminderPage actual = service.getAlertReminderForTreeViewByEventId(
-        "30004", 0, 10, "bmppu", eventId
+        "30004", 0, 10, "uid", eventId
     );
 
     assertEquals(2, actual.getResults().size());
+}
+
+
+@Test
+void testGetAlertReminderForTreeViewByEventIdForException() {
+    String eventId = "event1234";
+
+    assertThrows(DpwException.class, () -> 
+        service.getAlertReminderForTreeViewByEventId("30004", 0, 10, "uid", eventId)
+    );
 }
