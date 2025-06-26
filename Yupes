@@ -1,101 +1,25 @@
-import com.bnpparibas.dpw.helpers.BusinessDateHelper;
-import com.bnpparibas.dpw.models.BusinessDates;
-import com.github.tomakehurst.wiremock.WireMockServer;
-import com.github.tomakehurst.wiremock.client.WireMock;
-import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
-import com.github.tomakehurst.wiremock.http.ResponseDefinitionBuilder;
-import com.github.tomakehurst.wiremock.matching.UrlPattern;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.test.util.ReflectionTestUtils;
+@Test
+void testGetAlertReminderForTreeViewByEventId() {
+    String eventId = "event1234";
 
-import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
-import static com.github.tomakehurst.wiremock.client.WireMock.get;
-import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
-import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
+    AlertEntity alertEntity = new AlertEntity(); // or populate fields as needed
+    ReminderEntity reminderEntity = new ReminderEntity();
 
-@ExtendWith(MockitoExtension.class)
-class BusinessDateHelperTest {
+    given(dpwEventHelper.getEventAlertsFuture(eventId))
+        .willReturn(CompletableFuture.completedFuture(Lists.newArrayList(alertEntity)));
 
-    private static final String BUSINESS_DATE_ENDPOINT = "/go-ivision/vi/business-dates";
+    given(dpwEventHelper.getEventReminderFuture(eventId))
+        .willReturn(CompletableFuture.completedFuture(Lists.newArrayList(reminderEntity)));
 
-    private static final String BUSINESS_DATE_JSON_FR =
-            "{\n" +
-            "  \"businessDates\": {\n" +
-            "    \"currentBusinessDate\": \"03/05/2024\",\n" +
-            "    \"nextBusinessDate\": \"06/05/2024\",\n" +
-            "    \"previousBusinessDate\": \"02/05/2024\"\n" +
-            "  },\n" +
-            "  \"holidayDates\": [\n" +
-            "    \"01/01/2024\",\n" +
-            "    \"01/04/2024\",\n" +
-            "    \"01/05/2024\",\n" +
-            "    \"08/05/2024\",\n" +
-            "    \"09/05/2024\",\n" +
-            "    \"20/05/2024\",\n" +
-            "    \"14/07/2024\",\n" +
-            "    \"15/08/2024\",\n" +
-            "    \"01/11/2024\"\n" +
-            "  ],\n" +
-            "  \"totalRecords\": 1\n" +
-            "}";
+    AlertReminderDetail alertReminderDetail = new AlertReminderDetail();
+    alertReminderDetail.setCreationDate(LocalDateTime.now());
 
-    private WireMockServer wireMockServer;
-    private BusinessDateHelper businessDateHelper;
+    given(dpwEventHelper.getAlertReminderDetail(any(AlertEntity.class)))
+        .willReturn(alertReminderDetail);
 
-    @BeforeEach
-    void setup() {
-        wireMockServer = new WireMockServer(WireMockConfiguration.options().port(8080));
-        wireMockServer.start();
+    TreeviewAlertReminderPage actual = service.getAlertReminderForTreeViewByEventId(
+        "30004", 0, 10, "bmppu", eventId
+    );
 
-        businessDateHelper = new BusinessDateHelper();
-        ReflectionTestUtils.setField(businessDateHelper, "apigeeBaseUrl", wireMockServer.baseUrl());
-        ReflectionTestUtils.setField(businessDateHelper, "businessDateEndpoint", BUSINESS_DATE_ENDPOINT);
-    }
-
-    @AfterEach
-    void teardown() {
-        wireMockServer.stop();
-    }
-
-    @Test
-    void getBusinessDates() {
-        // Case 1: 200 OK
-        stubFor(get(urlEqualTo(BUSINESS_DATE_ENDPOINT + "?branchCode=30004"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                        .withBody(BUSINESS_DATE_JSON_FR)));
-
-        BusinessDates businessDates200 = businessDateHelper.getBusinessDates("30004", "FR");
-        assertNotNull(businessDates200);
-        assertEquals("03/05/2024", businessDates200.getCurrentBusinessDate());
-
-        // Case 2: 500 Error
-        stubFor(get(urlEqualTo(BUSINESS_DATE_ENDPOINT + "?branchCode=30005"))
-                .willReturn(aResponse()
-                        .withStatus(500)
-                        .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                        .withBody("{}")));
-
-        BusinessDates businessDates500 = businessDateHelper.getBusinessDates("30005", "FR");
-        assertNull(businessDates500);
-
-        // Case 3: 404 Not Found
-        stubFor(get(urlEqualTo(BUSINESS_DATE_ENDPOINT + "?branchCode=30006"))
-                .willReturn(aResponse()
-                        .withStatus(404)));
-
-        BusinessDates businessDates404 = businessDateHelper.getBusinessDates("30006", "FR");
-        assertNull(businessDates404);
-    }
+    assertEquals(2, actual.getResults().size());
 }
-
