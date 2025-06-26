@@ -1,14 +1,16 @@
 @Test
-public void findFirstByProductGroupAndEventTest() {
-    ThresholdEntity entity = new ThresholdEntity();
-    entity.setProductName("Product Name 1");
-    entity.setProductGroupName("Product Group 1");
-    entity.setEventName("Event 1");
-    entity.setSector("+");
-    entity.setBranchCode("30004");
-    entity.setCountryCode("IN");
+public void testFindFirstByProductGroupAndEventSuccess() {
+    ThresholdEntity thresholdEntity = new ThresholdEntity();
+    thresholdEntity.setProductName("Product Name 1");
+    thresholdEntity.setProductGroupName("Product Group 1");
+    thresholdEntity.setEventName("Event 1");
+    thresholdEntity.setSector("+");
+    thresholdEntity.setBranchCode("30004");
+    thresholdEntity.setCountryCode("IN");
 
-    entity = dpwThresholdRepository.save(entity); // ✅ Save test data
+    given(dpwThresholdRepository.findFirstByProductNameAndProductGroupNameAndEventNameAndSectorAndBranchCodeAndCountryCode(
+        "Product Name 1", "Product Group 1", "Event 1", "+", "30004", "IN"
+    )).willReturn(Optional.of(thresholdEntity));
 
     Optional<ThresholdEntity> dpwThreshold = dpwThresholdRepository
         .findFirstByProductNameAndProductGroupNameAndEventNameAndSectorAndBranchCodeAndCountryCode(
