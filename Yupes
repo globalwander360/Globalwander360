@@ -1,8 +1,32 @@
-@Test(expected = DpwEntityNotFoundException.class)
-public void linkRequestShouldThrowDpwEntityNotFoundExceptionWhenRequestNotFound() {
-    // Arrange
-    given(requestRepository.findById("1")).willReturn(Optional.empty());
+@Test
+public void linkRequestAndGetDocMetaData() {
+    RequestEntity requestEntity = DpwRepositoryTestHelper.createRequestEntity(1);
+    requestEntity.setStatusInUV("03");
 
-    // Act
-    service.linkRequest("30004", "1", "1", "1", "e17938", Boolean.TRUE);
+    EventEntity eventEntity = DpwRepositoryTestHelper.createEventEntity();
+    eventEntity.setStatusInUV("02");
+    requestEntity.setEvent(eventEntity);
+
+    given(requestService.findRequestEntityById("1")).willReturn(requestEntity);
+    given(requestRepository.findById("1")).willReturn(Optional.of(requestEntity));
+    given(eventRepository.findById("1")).willReturn(Optional.of(eventEntity));
+
+    UserV3 user = new UserV3();
+    user.setId(1);
+    given(userApi.getUserByUserId(any(), any(), any())).willReturn(user);
+
+    List<DocumentMetaDataDocstoreWithVersioning> linkedData = new ArrayList<>();
+    DocumentMetaDataDocstoreWithVersioning documentMeta = new DocumentMetaDataDocstoreWithVersioning();
+    documentMeta.setId("1");
+    linkedData.add(documentMeta);
+
+    given(docApi.linkRequest(any(), any(), any(), any(), any())).willReturn(linkedData);
+
+    List<DocumentMetaDataDocstoreWithVersioning> result = service.linkRequest(
+        "30004", "1", "1", "1", "e17938", Boolean.TRUE
+    );
+
+    assertNotNull(result);
+    assertEquals(1, result.size());
+    assertEquals("1", result.get(0).getId());
 }
