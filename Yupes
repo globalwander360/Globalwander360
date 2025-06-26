@@ -1,36 +1,9 @@
-@Test
-void testGetAlertReminderForTreeViewByEventId() {
-    String eventId = "event1234";
+@Test(expected = BusinessValidationException.class)
+public void linkRequestShouldThrowBusinessValidationException() {
+    RequestEntity entity = DpwRepositoryTestHelper.createRequestEntity(1);
+    entity.setEvent(null); // causes business validation to fail
 
-    AlertEntity alertEntity = new AlertEntity(); // set properties if needed
-    ReminderEntity reminderEntity = new ReminderEntity();
-
-    given(dpwEventHelper.getEventAlertsFuture(eventId))
-        .willReturn(CompletableFuture.completedFuture(List.of(alertEntity)));
-
-    given(dpwEventHelper.getEventReminderFuture(eventId))
-        .willReturn(CompletableFuture.completedFuture(List.of(reminderEntity)));
-
-    AlertReminderDetail alertReminderDetail = new AlertReminderDetail();
-    alertReminderDetail.setCreationDate(LocalDateTime.now());
-
-    // ✅ Correct single-arg stubbing
-    given(dpwEventHelper.getAlertReminderDetail(any(AlertEntity.class)))
-        .willReturn(alertReminderDetail);
-
-    TreeviewAlertReminderPage actual = service.getAlertReminderForTreeViewByEventId(
-        "30004", 0, 10, "uid", eventId
-    );
-
-    assertEquals(2, actual.getResults().size());
-}
-
-
-@Test
-void testGetAlertReminderForTreeViewByEventIdForException() {
-    String eventId = "event1234";
-
-    assertThrows(DpwException.class, () -> 
-        service.getAlertReminderForTreeViewByEventId("30004", 0, 10, "uid", eventId)
-    );
+    given(requestRepository.findById("1")).willReturn(Optional.of(entity));
+    
+    service.linkRequest("30004", "1", "1", "1", "e17938", Boolean.TRUE);
 }
