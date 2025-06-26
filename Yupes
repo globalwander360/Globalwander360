@@ -7,20 +7,26 @@ public void linkRequestAndGetDocMetaData() {
     eventEntity.setStatusInUV("02");
     requestEntity.setEvent(eventEntity);
 
-    given(requestService.findRequestEntityById("1")).willReturn(requestEntity);
-    given(requestRepository.findById("1")).willReturn(Optional.of(requestEntity));
-    given(eventRepository.findById("1")).willReturn(Optional.of(eventEntity));
+    given(requestService.findRequestEntityById("1"))
+        .willReturn(requestEntity);
+
+    given(requestRepository.findById("1"))
+        .willReturn(Optional.of(requestEntity));
+
+    given(eventRepository.findById("1"))
+        .willReturn(Optional.of(eventEntity));
 
     UserV3 user = new UserV3();
     user.setId(1);
-    given(userApi.getUserByUserId(any(), any(), any())).willReturn(user);
+    given(userApi.getUserByUserId(any(), any(), any()))
+        .willReturn(user);
 
-    List<DocumentMetaDataDocstoreWithVersioning> linkedData = new ArrayList<>();
     DocumentMetaDataDocstoreWithVersioning documentMeta = new DocumentMetaDataDocstoreWithVersioning();
     documentMeta.setId("1");
-    linkedData.add(documentMeta);
+    List<DocumentMetaDataDocstoreWithVersioning> linkedData = List.of(documentMeta);
 
-    given(docApi.linkRequest(any(), any(), any(), any(), any())).willReturn(linkedData);
+    given(docApi.linkRequest(any(), any(), any(), any(), any()))
+        .willReturn(linkedData);
 
     List<DocumentMetaDataDocstoreWithVersioning> result = service.linkRequest(
         "30004", "1", "1", "1", "e17938", Boolean.TRUE
