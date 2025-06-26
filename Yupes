@@ -1,10 +1,7 @@
-@Test(expected = BusinessValidationException.class)
-public void linkRequestShouldThrowBusinessValidationExceptionWhenEventIsNull() {
+@Test(expected = DpwEntityNotFoundException.class)
+public void linkRequestShouldThrowDpwEntityNotFoundExceptionWhenRequestNotFound() {
     // Arrange
-    RequestEntity entity = DpwRepositoryTestHelper.createRequestEntity(1);
-    entity.setEvent(null); // this will cause the business validation to fail
-
-    given(requestRepository.findById("1")).willReturn(Optional.of(entity));
+    given(requestRepository.findById("1")).willReturn(Optional.empty());
 
     // Act
     service.linkRequest("30004", "1", "1", "1", "e17938", Boolean.TRUE);
