@@ -1,38 +1,43 @@
 @Test
 public void linkRequestAndGetDocMetaData() {
-    RequestEntity requestEntity = DpwRepositoryTestHelper.createRequestEntity(1);
-    requestEntity.setStatusInUV("03");
+    try {
+        RequestEntity requestEntity = DpwRepositoryTestHelper.createRequestEntity(1);
+        requestEntity.setStatusInUV("03");
 
-    EventEntity eventEntity = DpwRepositoryTestHelper.createEventEntity();
-    eventEntity.setStatusInUV("02");
-    requestEntity.setEvent(eventEntity);
+        EventEntity eventEntity = DpwRepositoryTestHelper.createEventEntity();
+        eventEntity.setStatusInUV("02");
+        requestEntity.setEvent(eventEntity);
 
-    given(requestService.findRequestEntityById("1"))
-        .willReturn(requestEntity);
+        given(requestService.findRequestEntityById("1"))
+            .willReturn(requestEntity);
 
-    given(requestRepository.findById("1"))
-        .willReturn(Optional.of(requestEntity));
+        given(requestRepository.findById("1"))
+            .willReturn(Optional.of(requestEntity));
 
-    given(eventRepository.findById("1"))
-        .willReturn(Optional.of(eventEntity));
+        given(eventRepository.findById("1"))
+            .willReturn(Optional.of(eventEntity));
 
-    UserV3 user = new UserV3();
-    user.setId(1);
-    given(userApi.getUserByUserId(any(), any(), any()))
-        .willReturn(user);
+        UserV3 user = new UserV3();
+        user.setId(1);
+        given(userApi.getUserByUserId(any(), any(), any()))
+            .willReturn(user);
 
-    DocumentMetaDataDocstoreWithVersioning documentMeta = new DocumentMetaDataDocstoreWithVersioning();
-    documentMeta.setId("1");
-    List<DocumentMetaDataDocstoreWithVersioning> linkedData = List.of(documentMeta);
+        DocumentMetaDataDocstoreWithVersioning documentMeta = new DocumentMetaDataDocstoreWithVersioning();
+        documentMeta.setId("1");
+        List<DocumentMetaDataDocstoreWithVersioning> linkedData = List.of(documentMeta);
 
-    given(docApi.linkRequest(any(), any(), any(), any(), any()))
-        .willReturn(linkedData);
+        given(docApi.linkRequest(any(), any(), any(), any(), any()))
+            .willReturn(linkedData);
 
-    List<DocumentMetaDataDocstoreWithVersioning> result = service.linkRequest(
-        "30004", "1", "1", "1", "e17938", Boolean.TRUE
-    );
+        List<DocumentMetaDataDocstoreWithVersioning> result = service.linkRequest(
+            "30004", "1", "1", "1", "e17938", Boolean.TRUE
+        );
 
-    assertNotNull(result);
-    assertEquals(1, result.size());
-    assertEquals("1", result.get(0).getId());
+        assertNotNull(result);
+        assertEquals(1, result.size());
+        assertEquals("1", result.get(0).getId());
+
+    } catch (Exception ex) {
+        fail("Test failed due to unexpected exception: " + ex.getMessage());
+    }
 }
