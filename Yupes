@@ -1,80 +1,95 @@
-
-
-✅ 1. TEST CLASS — (Mock setup for dpwEventHelper)
-
-These lines belong in your JUnit test class (e.g., EventServiceTest.java):
-
-// ✅ Mocks used only in test
-String eventId = "event1234";
-AlertEntity alertEntity = new AlertEntity();
-ReminderEntity reminderEntity = new ReminderEntity();
-AlertReminderDetail alertReminderDetail = new AlertReminderDetail();
-alertReminderDetail.setCreationDate(LocalDateTime.now());
-
-// ✅ Mocking dependencies
-given(dpwEventHelper.getEventAlertsFuture(eventId))
+// CORRECTED TEST CASE
+@Test
+void testGetAlertReminderForTreeViewByEventId() {
+    String eventId = "event1234";
+    String branchCode = "30804";
+    String bnppuid = "uid";
+    
+    // Mock alert and reminder entities
+    AlertEntity alertEntity = new AlertEntity();
+    ReminderEntity reminderEntity = new ReminderEntity();
+    
+    // Setup mocks for futures
+    given(dpwEventHelper.getEventAlertsFuture(eventId))
         .willReturn(CompletableFuture.completedFuture(Lists.newArrayList(alertEntity)));
-
-given(dpwEventHelper.getEventReminderFuture(eventId))
+    
+    given(dpwEventHelper.getEventReminderFuture(eventId))
         .willReturn(CompletableFuture.completedFuture(Lists.newArrayList(reminderEntity)));
+    
+    // Setup AlertReminderDetail mocks
+    AlertReminderDetail alertReminderDetail1 = new AlertReminderDetail();
+    alertReminderDetail1.setCreationDate(LocalDateTime.now().minusHours(1));
+    
+    AlertReminderDetail alertReminderDetail2 = new AlertReminderDetail();
+    alertReminderDetail2.setCreationDate(LocalDateTime.now());
+    
+    // Mock the getAlertReminderDetail method calls
+    given(dpwEventHelper.getAlertReminderDetail(eq(alertEntity)))
+        .willReturn(alertReminderDetail1);
+    
+    given(dpwEventHelper.getAlertReminderDetail(eq(reminderEntity), eq(bnppuid)))
+        .willReturn(alertReminderDetail2);
+    
+    // Execute the method
+    TreeviewAlertReminderPage actual = service.getAlertReminderForTreeViewByEventId(
+        branchCode, 0, 10, bnppuid, eventId);
+    
+    // Assertions
+    assertEquals(2, actual.getResults().size());
+}
 
-given(dpwEventHelper.getAlertReminderDetail(any(AlertEntity.class)))
-        .willReturn(alertReminderDetail);
-
-given(dpwEventHelper.getAlertReminderDetail(any(ReminderEntity.class), anyString()))
-        .willReturn(alertReminderDetail);
-
-// ✅ Call the method under test
-TreeviewAlertReminderPage actual = service.getAlertReminderForTreeViewByEventId(
-        "30804", 8, 18, "uid", eventId);
-
-// ✅ Assert result
-assertEquals(2, actual.getResults().size());
-
-
----
-
-✅ 2. DEVELOPMENT (SERVICE) CLASS — (Fix broken thenCombine logic)
-
-These changes go in your actual service method, e.g., EventServiceImpl.java inside the method:
-
-getAlertReminderForTreeViewByEventId(String branchCode, Integer skip, Integer take, String bnppuid, String eventId)
-
-🔧 Replace this broken line:
-
-.thenCombine(dpwEventHelper.getEventAlertsFuture(eventId), (alertReminderDetailList, alertEntities) -> {
-    alertReminderDetailList.addAll(.toList()); // ❌ invalid
-    alertEntities.stream().map(ard -> dpwEventHelper.getAlertReminderDetail(ard))
-    return alertReminderDetailList;
-})
-
-✅ With this correct version:
-
-.thenCombine(dpwEventHelper.getEventReminderFuture(eventId), (alertEntities, reminderEntities) -> {
-    List<AlertReminderDetail> detailList = new ArrayList<>();
-
-    for (AlertEntity alert : alertEntities) {
-        detailList.add(dpwEventHelper.getAlertReminderDetail(alert));
+// CORRECTED IMPLEMENTATION
+@Override
+public TreeviewAlertReminderPage getAlertReminderForTreeViewByEventId(
+    String branchCode, Integer skip, Integer take, String bnppuid, String eventId) {
+    
+    log.info("Fetching Alert & Reminder for treeview, eventId: {}, branchCode: {}", eventId, branchCode);
+    
+    int pageSkip = skip / take;
+    Pageable pageable = PageRequest.of(pageSkip, take);
+    
+    List<AlertReminderDetail> alertReminderDetails;
+    
+    try {
+        CompletableFuture<List<AlertReminderDetail>> alertReminderDetailsCompletableFuture = 
+            CompletableFuture.completedFuture(new ArrayList<AlertReminderDetail>())
+            .thenCombine(dpwEventHelper.getEventAlertsFuture(eventId), 
+                (alertReminderDetailList, alertEntities) -> {
+                    alertReminderDetailList.addAll(
+                        alertEntities.stream()
+                            .map(alertEntity -> dpwEventHelper.getAlertReminderDetail(alertEntity))
+                            .collect(Collectors.toList())
+                    );
+                    return alertReminderDetailList;
+                })
+            .thenCombine(dpwEventHelper.getEventReminderFuture(eventId), 
+                (alertReminderDetailList, reminderEntities) -> {
+                    alertReminderDetailList.addAll(
+                        reminderEntities.stream()
+                            .map(reminderEntity -> dpwEventHelper.getAlertReminderDetail(reminderEntity, bnppuid))
+                            .collect(Collectors.toList())
+                    );
+                    return alertReminderDetailList;
+                })
+            .thenApply(alertReminderDetailList -> 
+                alertReminderDetailList.stream()
+                    .sorted(Comparator.comparing(AlertReminderDetail::getCreationDate))
+                    .collect(Collectors.toList())
+            );
+        
+        alertReminderDetails = alertReminderDetailsCompletableFuture.join();
+        
+        final int start = (int) pageable.getOffset();
+        final int end = Math.min((start + pageable.getPageSize()), alertReminderDetails.size());
+        
+        Page<AlertReminderDetail> alertReminderDetailPage = new PageImpl<>(
+            alertReminderDetails.subList(start, end), pageable, alertReminderDetails.size());
+        
+        return getTreeviewAlertReminderPage(alertReminderDetailPage);
+        
+    } catch (Exception ex) {
+        log.error("Exception in [EventServiceImpl] [getAlertReminderForTreeViewByEventId], message: {}, eventId: {}, branchCode: {}, bnppuid: {}", 
+            ex.getMessage(), eventId, branchCode, bnppuid);
+        throw new DpwException("Error fetching Alert & Reminder for treeview, eventId: " + eventId, ex);
     }
-
-    for (ReminderEntity reminder : reminderEntities) {
-        detailList.add(dpwEventHelper.getAlertReminderDetail(reminder, bnppuid));
-    }
-
-    return detailList.stream()
-        .sorted(Comparator.comparing(AlertReminderDetail::getCreationDate))
-        .collect(Collectors.toList());
-})
-
-
----
-
-🟢 Summary:
-
-Purpose	File	Code Snippet
-
-Test mocking + check	EventServiceTest.java	given(...).willReturn(...), assertEquals(...)
-Business logic fix	EventServiceImpl.java	Fix thenCombine(...) logic to properly map alerts & reminders
-
-
-Let me know if you’d like me to paste the entire fixed service method in one go.
+}
