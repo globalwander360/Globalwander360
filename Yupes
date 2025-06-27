@@ -1,495 +1,80 @@
-package com.bnpp.dpw.service.impl;
 
-import static org.mockito.Mockito.*;
-import static org.junit.jupiter.api.Assertions.*;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.BeforeEach;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.mockito.ArgumentMatchers;
+✅ 1. TEST CLASS — (Mock setup for dpwEventHelper)
 
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.*;
+These lines belong in your JUnit test class (e.g., EventServiceTest.java):
 
-public class DpwEventHelperTest {
+// ✅ Mocks used only in test
+String eventId = "event1234";
+AlertEntity alertEntity = new AlertEntity();
+ReminderEntity reminderEntity = new ReminderEntity();
+AlertReminderDetail alertReminderDetail = new AlertReminderDetail();
+alertReminderDetail.setCreationDate(LocalDateTime.now());
 
-    @Mock
-    private EventWorkflowApi eventWorkflowApi;
-    
-    @Mock
-    private RequestRepository requestRepository;
-    
-    private DpwEventHelper dpwEventHelper;
+// ✅ Mocking dependencies
+given(dpwEventHelper.getEventAlertsFuture(eventId))
+        .willReturn(CompletableFuture.completedFuture(Lists.newArrayList(alertEntity)));
 
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
-        dpwEventHelper = new DpwEventHelper();
-        // Initialize any required dependencies
+given(dpwEventHelper.getEventReminderFuture(eventId))
+        .willReturn(CompletableFuture.completedFuture(Lists.newArrayList(reminderEntity)));
+
+given(dpwEventHelper.getAlertReminderDetail(any(AlertEntity.class)))
+        .willReturn(alertReminderDetail);
+
+given(dpwEventHelper.getAlertReminderDetail(any(ReminderEntity.class), anyString()))
+        .willReturn(alertReminderDetail);
+
+// ✅ Call the method under test
+TreeviewAlertReminderPage actual = service.getAlertReminderForTreeViewByEventId(
+        "30804", 8, 18, "uid", eventId);
+
+// ✅ Assert result
+assertEquals(2, actual.getResults().size());
+
+
+---
+
+✅ 2. DEVELOPMENT (SERVICE) CLASS — (Fix broken thenCombine logic)
+
+These changes go in your actual service method, e.g., EventServiceImpl.java inside the method:
+
+getAlertReminderForTreeViewByEventId(String branchCode, Integer skip, Integer take, String bnppuid, String eventId)
+
+🔧 Replace this broken line:
+
+.thenCombine(dpwEventHelper.getEventAlertsFuture(eventId), (alertReminderDetailList, alertEntities) -> {
+    alertReminderDetailList.addAll(.toList()); // ❌ invalid
+    alertEntities.stream().map(ard -> dpwEventHelper.getAlertReminderDetail(ard))
+    return alertReminderDetailList;
+})
+
+✅ With this correct version:
+
+.thenCombine(dpwEventHelper.getEventReminderFuture(eventId), (alertEntities, reminderEntities) -> {
+    List<AlertReminderDetail> detailList = new ArrayList<>();
+
+    for (AlertEntity alert : alertEntities) {
+        detailList.add(dpwEventHelper.getAlertReminderDetail(alert));
     }
 
-    @Test
-    void updateWorkflowAndEventEntityBypassThresholdFlagTrue() {
-        // Arrange
-        String pgpeCodeList = "{\"france\":[\"SOMSC\", \"SOMAE\"],\"belgium\":[\"SOMSC\",\"SOMAE\"],\"men\":[\"SOMSC\", \"SOMAE\"]}";
-        
-        EventEntity eventEntity = DpwRepositoryTestHelper.createEventEntity();
-        eventEntity.setEventType("Claim"); // Set non-empty event type
-        eventEntity.setPgpeCode("ELCU");
-        eventEntity.setEventVariationName(Collections.singletonList("EV"));
-        eventEntity.setProcessingEntityName("france"); // Add this field
-        
-        RequestEntity requestEntity = DpwRepositoryTestHelper.createRequestEntity(1);
-        List<RequestEntity> requestEntityList = new ArrayList<>();
-        requestEntityList.add(requestEntity);
-        
-        EventWorkflow ewBody = new EventWorkflow();
-        ewBody.setNextAction("tbScrutiny");
-        
-        WorkflowStepStatus workflowStepStatus = new WorkflowStepStatus();
-        workflowStepStatus.setStatus("Completed");
-        workflowStepStatus.setStep(Arrays.asList("Initiate", "Inputer"));
-        ewBody.setWorkflowStepStatus(workflowStepStatus);
-        
-        FlagFieldDetails flagFieldDetails = new FlagFieldDetails();
-        flagFieldDetails.setThresholdFlag(true);
-        
-        TransactionProperty transactionPropertyObject = new TransactionProperty();
-        List<TransactionProperties> transactionPropertiesList = new ArrayList<>();
-        TransactionProperties transactionProperties = new TransactionProperties();
-        transactionProperties.setPropertyName("TPN");
-        transactionPropertiesList.add(transactionProperties);
-        transactionPropertyObject.setTransactionProperties(transactionPropertiesList);
-        
-        // Mock the API calls
-        when(eventWorkflowApi.updateEventWorkflow(
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any()
-        )).thenReturn(ewBody);
-        
-        when(requestRepository.findByEventId(ArgumentMatchers.any()))
-            .thenReturn(requestEntityList);
-        
-        // Act
-        RequestEvent event = DpwDTOConverter.convert(eventEntity, RequestEvent.class);
-        
-        assertDoesNotThrow(() -> {
-            dpwEventHelper.updateWorkflowAndEventEntity(
-                event, 
-                "bnppuide1", 
-                "submitForValidation", 
-                eventEntity, 
-                "30084", 
-                "tbScrutiny", 
-                flagFieldDetails, 
-                LocalDateTime.now(), 
-                transactionPropertyObject
-            );
-        });
+    for (ReminderEntity reminder : reminderEntities) {
+        detailList.add(dpwEventHelper.getAlertReminderDetail(reminder, bnppuid));
     }
 
-    @Test
-    void updateWorkflowAndEventEntityCheckThreshold() {
-        // Arrange
-        EventEntity eventEntity = DpwRepositoryTestHelper.createEventEntity();
-        eventEntity.setEventType("Claim");
-        eventEntity.setPgpeCode("ILCA");
-        eventEntity.setEventVariationName(Collections.singletonList("EV"));
-        eventEntity.setCurrencyRate(new BigDecimal(1));
-        eventEntity.setAmount(new BigDecimal(1));
-        
-        RequestEntity requestEntity = DpwRepositoryTestHelper.createRequestEntity(1);
-        List<RequestEntity> requestEntityList = new ArrayList<>();
-        requestEntityList.add(requestEntity);
-        
-        EventWorkflow ewBody = new EventWorkflow();
-        ewBody.setNextAction("tbCompliance");
-        
-        WorkflowStepStatus workflowStepStatus = new WorkflowStepStatus();
-        workflowStepStatus.setStatus("Completed");
-        workflowStepStatus.setStep(Arrays.asList("Initiate", "Inputer"));
-        ewBody.setWorkflowStepStatus(workflowStepStatus);
-        
-        FlagFieldDetails flagFieldDetails = new FlagFieldDetails();
-        flagFieldDetails.setThresholdFlag(true);
-        
-        TransactionProperty transactionPropertyObject = new TransactionProperty();
-        List<TransactionProperties> transactionPropertiesList = new ArrayList<>();
-        TransactionProperties transactionProperties = new TransactionProperties();
-        transactionProperties.setPropertyName("TPN");
-        transactionPropertiesList.add(transactionProperties);
-        transactionPropertyObject.setTransactionProperties(transactionPropertiesList);
-        
-        // Mock the API calls
-        when(eventWorkflowApi.updateEventWorkflow(
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any()
-        )).thenReturn(ewBody);
-        
-        when(requestRepository.findByEventId(ArgumentMatchers.any()))
-            .thenReturn(requestEntityList);
-        
-        // Act & Assert
-        RequestEvent event = DpwDTOConverter.convert(eventEntity, RequestEvent.class);
-        
-        assertDoesNotThrow(() -> {
-            dpwEventHelper.updateWorkflowAndEventEntity(
-                event, 
-                "e12928", 
-                "submitForValidation", 
-                eventEntity, 
-                "30004", 
-                "Pending UV Document", 
-                flagFieldDetails, 
-                LocalDateTime.now(), 
-                transactionPropertyObject
-            );
-        });
-    }
+    return detailList.stream()
+        .sorted(Comparator.comparing(AlertReminderDetail::getCreationDate))
+        .collect(Collectors.toList());
+})
 
-    @Test
-    void updateWorkflowAndEventEntityCheckThresholdBranchCode() {
-        // Arrange
-        EventEntity eventEntity = DpwRepositoryTestHelper.createEventEntity();
-        eventEntity.setEventType("Claim");
-        eventEntity.setPgpeCode("ILCA");
-        eventEntity.setEventVariationName(Collections.singletonList("EV"));
-        eventEntity.setCurrencyRate(new BigDecimal(1));
-        eventEntity.setAmount(new BigDecimal(1));
-        
-        RequestEntity requestEntity = DpwRepositoryTestHelper.createRequestEntity(1);
-        List<RequestEntity> requestEntityList = new ArrayList<>();
-        requestEntityList.add(requestEntity);
-        
-        EventWorkflow ewBody = new EventWorkflow();
-        ewBody.setNextAction("tbCompliance");
-        
-        WorkflowStepStatus workflowStepStatus = new WorkflowStepStatus();
-        workflowStepStatus.setStatus("Completed");
-        workflowStepStatus.setStep(Arrays.asList("Initiate", "Inputer"));
-        ewBody.setWorkflowStepStatus(workflowStepStatus);
-        
-        FlagFieldDetails flagFieldDetails = new FlagFieldDetails();
-        flagFieldDetails.setThresholdFlag(true);
-        
-        TransactionProperty transactionPropertyObject = new TransactionProperty();
-        List<TransactionProperties> transactionPropertiesList = new ArrayList<>();
-        TransactionProperties transactionProperties = new TransactionProperties();
-        transactionProperties.setPropertyName("TPN");
-        transactionPropertiesList.add(transactionProperties);
-        transactionPropertyObject.setTransactionProperties(transactionPropertiesList);
-        
-        // Mock the API calls
-        when(eventWorkflowApi.updateEventWorkflow(
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any()
-        )).thenReturn(ewBody);
-        
-        when(requestRepository.findByEventId(ArgumentMatchers.any()))
-            .thenReturn(requestEntityList);
-        
-        // Act & Assert
-        RequestEvent event = DpwDTOConverter.convert(eventEntity, RequestEvent.class);
-        
-        assertDoesNotThrow(() -> {
-            dpwEventHelper.updateWorkflowAndEventEntity(
-                event, 
-                "e12928", 
-                "submitForValidation", 
-                eventEntity, 
-                "30004", 
-                "Pending UV Document", 
-                flagFieldDetails, 
-                LocalDateTime.now(), 
-                transactionPropertyObject
-            );
-        });
-    }
 
-    @Test
-    void updateWorkflowAndEventEntityClaim() {
-        // Arrange
-        EventEntity eventEntity = DpwRepositoryTestHelper.createEventEntity();
-        eventEntity.setEventType("Claim");
-        eventEntity.setPgpeCode("ILCA");
-        eventEntity.setEventVariationName(Collections.singletonList("EV"));
-        
-        RequestEntity requestEntity = DpwRepositoryTestHelper.createRequestEntity(1);
-        List<RequestEntity> requestEntityList = new ArrayList<>();
-        requestEntityList.add(requestEntity);
-        
-        EventWorkflow ewBody = new EventWorkflow();
-        ewBody.setNextAction("tbCompliance");
-        
-        WorkflowStepStatus workflowStepStatus = new WorkflowStepStatus();
-        workflowStepStatus.setStatus("Completed");
-        workflowStepStatus.setStep(Arrays.asList("Initiate", "Inputer"));
-        ewBody.setWorkflowStepStatus(workflowStepStatus);
-        
-        TransactionProperty transactionPropertyObject = new TransactionProperty();
-        List<TransactionProperties> transactionPropertiesList = new ArrayList<>();
-        TransactionProperties transactionProperties = new TransactionProperties();
-        transactionProperties.setPropertyName("TPN");
-        transactionPropertiesList.add(transactionProperties);
-        transactionPropertyObject.setTransactionProperties(transactionPropertiesList);
-        
-        // Mock the API calls
-        when(eventWorkflowApi.updateEventWorkflow(
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any()
-        )).thenReturn(ewBody);
-        
-        when(requestRepository.findByEventId(ArgumentMatchers.any()))
-            .thenReturn(requestEntityList);
-        
-        // Act & Assert
-        RequestEvent event = DpwDTOConverter.convert(eventEntity, RequestEvent.class);
-        
-        assertDoesNotThrow(() -> {
-            dpwEventHelper.updateWorkflowAndEventEntity(
-                event, 
-                "e12928", 
-                "submitForValidation", 
-                eventEntity, 
-                "30084", 
-                "Pending UV Document", 
-                new FlagFieldDetails(), 
-                LocalDateTime.now(), 
-                transactionPropertyObject
-            );
-        });
-    }
+---
 
-    @Test
-    void updateWorkflowAndEventEntityEventTypeBlank() {
-        // Arrange
-        EventEntity eventEntity = DpwRepositoryTestHelper.createEventEntity();
-        eventEntity.setEventType(""); // Blank event type
-        eventEntity.setPgpeCode("ILCA");
-        eventEntity.setEventVariationName(Collections.singletonList("EV"));
-        
-        RequestEntity requestEntity = DpwRepositoryTestHelper.createRequestEntity(1);
-        List<RequestEntity> requestEntityList = new ArrayList<>();
-        requestEntityList.add(requestEntity);
-        
-        EventWorkflow ewBody = new EventWorkflow();
-        ewBody.setNextAction("tbCompliance");
-        
-        WorkflowStepStatus workflowStepStatus = new WorkflowStepStatus();
-        workflowStepStatus.setStatus("Completed");
-        workflowStepStatus.setStep(Arrays.asList("Initiate", "Inputer"));
-        ewBody.setWorkflowStepStatus(workflowStepStatus);
-        
-        TransactionProperty transactionPropertyObject = new TransactionProperty();
-        List<TransactionProperties> transactionPropertiesList = new ArrayList<>();
-        TransactionProperties transactionProperties = new TransactionProperties();
-        transactionProperties.setPropertyName("TPN");
-        transactionPropertiesList.add(transactionProperties);
-        transactionPropertyObject.setTransactionProperties(transactionPropertiesList);
-        
-        // Mock the API calls
-        when(eventWorkflowApi.updateEventWorkflow(
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any()
-        )).thenReturn(ewBody);
-        
-        when(requestRepository.findByEventId(ArgumentMatchers.any()))
-            .thenReturn(requestEntityList);
-        
-        // Act
-        RequestEvent event = DpwDTOConverter.convert(eventEntity, RequestEvent.class);
-        
-        assertDoesNotThrow(() -> {
-            dpwEventHelper.updateWorkflowAndEventEntity(
-                event, 
-                "e12928", 
-                "submitForValidation", 
-                eventEntity, 
-                "30004", 
-                "Pending UV Document", 
-                new FlagFieldDetails(), 
-                LocalDateTime.now(), 
-                transactionPropertyObject
-            );
-        });
-        
-        // Assert
-        assertEquals("", eventEntity.getEventType());
-    }
+🟢 Summary:
 
-    @Test
-    void updateWorkflowAndEventEntityEventTypeNull() {
-        // Arrange
-        EventEntity eventEntity = DpwRepositoryTestHelper.createEventEntity();
-        eventEntity.setEventType(null); // Null event type
-        eventEntity.setPgpeCode("ILCA");
-        eventEntity.setEventVariationName(Collections.singletonList("EV"));
-        
-        RequestEntity requestEntity = DpwRepositoryTestHelper.createRequestEntity(1);
-        List<RequestEntity> requestEntityList = new ArrayList<>();
-        requestEntityList.add(requestEntity);
-        
-        EventWorkflow ewBody = new EventWorkflow();
-        ewBody.setNextAction("tbCompliance");
-        
-        WorkflowStepStatus workflowStepStatus = new WorkflowStepStatus();
-        workflowStepStatus.setStatus("Completed");
-        workflowStepStatus.setStep(Arrays.asList("Initiate", "Inputer"));
-        ewBody.setWorkflowStepStatus(workflowStepStatus);
-        
-        TransactionProperty transactionPropertyObject = new TransactionProperty();
-        List<TransactionProperties> transactionPropertiesList = new ArrayList<>();
-        TransactionProperties transactionProperties = new TransactionProperties();
-        transactionProperties.setPropertyName("TPN");
-        transactionPropertiesList.add(transactionProperties);
-        transactionPropertyObject.setTransactionProperties(transactionPropertiesList);
-        
-        // Mock the API calls
-        when(eventWorkflowApi.updateEventWorkflow(
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any()
-        )).thenReturn(ewBody);
-        
-        when(requestRepository.findByEventId(ArgumentMatchers.any()))
-            .thenReturn(requestEntityList);
-        
-        // Act
-        RequestEvent event = DpwDTOConverter.convert(eventEntity, RequestEvent.class);
-        
-        assertDoesNotThrow(() -> {
-            dpwEventHelper.updateWorkflowAndEventEntity(
-                event, 
-                "e12928", 
-                "submitForValidation", 
-                eventEntity, 
-                "30004", 
-                "Pending UV Document", 
-                new FlagFieldDetails(), 
-                LocalDateTime.now(), 
-                transactionPropertyObject
-            );
-        });
-        
-        // Assert
-        assertNull(eventEntity.getEventType());
-    }
+Purpose	File	Code Snippet
 
-    @Test
-    void updateWorkflowAndEventEntitySetEventWorkflowData() {
-        // Arrange
-        EventEntity eventEntity = DpwRepositoryTestHelper.createEventEntity();
-        eventEntity.setEventSteps(null);
-        eventEntity.setEventType("Claim"); // Set a valid event type
-        
-        RequestEntity requestEntity = DpwRepositoryTestHelper.createRequestEntity(1);
-        List<RequestEntity> requestEntityList = new ArrayList<>();
-        requestEntityList.add(requestEntity);
-        
-        EventWorkflow ewBody = new EventWorkflow();
-        ewBody.setNextAction("autoValidate");
-        
-        WorkflowStepStatus workflowStepStatus = new WorkflowStepStatus();
-        workflowStepStatus.setStatus("Completed");
-        workflowStepStatus.setStep(Arrays.asList("Initiate", "Inputer"));
-        ewBody.setWorkflowStepStatus(workflowStepStatus);
-        
-        TransactionProperty transactionProperty = new TransactionProperty();
-        transactionProperty.addTransactionPropertiesItem(new TransactionProperties());
-        
-        // Mock the API calls
-        when(eventWorkflowApi.updateEventWorkflow(
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any()
-        )).thenReturn(ewBody);
-        
-        when(requestRepository.findByEventId(ArgumentMatchers.any()))
-            .thenReturn(requestEntityList);
-        
-        // Act & Assert
-        assertDoesNotThrow(() -> {
-            dpwEventHelper.updateWorkflowAndEventEntity(
-                new RequestEvent(), 
-                "e12928", 
-                "submitForValidation", 
-                eventEntity, 
-                "30004", 
-                "autoValidate", 
-                new FlagFieldDetails(), 
-                LocalDateTime.now(), 
-                transactionProperty
-            );
-        });
-    }
+Test mocking + check	EventServiceTest.java	given(...).willReturn(...), assertEquals(...)
+Business logic fix	EventServiceImpl.java	Fix thenCombine(...) logic to properly map alerts & reminders
 
-    @Test
-    void updateWorkflowAndEventEntityThresholdFlagTrue() {
-        // Arrange
-        EventEntity eventEntity = DpwRepositoryTestHelper.createEventEntity();
-        eventEntity.setEventType("Claim");
-        eventEntity.setPgpeCode("ILCA");
-        eventEntity.setEventVariationName(Collections.singletonList("EV"));
-        
-        RequestEntity requestEntity = DpwRepositoryTestHelper.createRequestEntity(1);
-        List<RequestEntity> requestEntityList = new ArrayList<>();
-        requestEntityList.add(requestEntity);
-        
-        EventWorkflow ewBody = new EventWorkflow();
-        ewBody.setNextAction("tbCompliance");
-        
-        WorkflowStepStatus workflowStepStatus = new WorkflowStepStatus();
-        workflowStepStatus.setStatus("Completed");
-        workflowStepStatus.setStep(Arrays.asList("Initiate", "Inputer"));
-        ewBody.setWorkflowStepStatus(workflowStepStatus);
-        
-        FlagFieldDetails flagFieldDetails = new FlagFieldDetails();
-        flagFieldDetails.setThresholdFlag(true);
-        
-        TransactionProperty transactionPropertyObject = new TransactionProperty();
-        List<TransactionProperties> transactionPropertiesList = new ArrayList<>();
-        TransactionProperties transactionProperties = new TransactionProperties();
-        transactionProperties.setPropertyName("TPN");
-        transactionPropertiesList.add(transactionProperties);
-        transactionPropertyObject.setTransactionProperties(transactionPropertiesList);
-        
-        // Mock the API calls
-        when(eventWorkflowApi.updateEventWorkflow(
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any(), 
-            ArgumentMatchers.any()
-        )).thenReturn(ewBody);
-        
-        when(requestRepository.findByEventId(ArgumentMatchers.any()))
-            .thenReturn(requestEntityList);
-        
-        // Act & Assert
-        RequestEvent event = DpwDTOConverter.convert(eventEntity, RequestEvent.class);
-        
-        assertDoesNotThrow(() -> {
-            dpwEventHelper.updateWorkflowAndEventEntity(
-                event, 
-                "e1292
+
+Let me know if you’d like me to paste the entire fixed service method in one go.
