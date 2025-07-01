@@ -1,95 +1,73 @@
-// CORRECTED TEST CASE
-@Test
-void testGetAlertReminderForTreeViewByEventId() {
-    String eventId = "event1234";
-    String branchCode = "30804";
-    String bnppuid = "uid";
-    
-    // Mock alert and reminder entities
-    AlertEntity alertEntity = new AlertEntity();
-    ReminderEntity reminderEntity = new ReminderEntity();
-    
-    // Setup mocks for futures
-    given(dpwEventHelper.getEventAlertsFuture(eventId))
-        .willReturn(CompletableFuture.completedFuture(Lists.newArrayList(alertEntity)));
-    
-    given(dpwEventHelper.getEventReminderFuture(eventId))
-        .willReturn(CompletableFuture.completedFuture(Lists.newArrayList(reminderEntity)));
-    
-    // Setup AlertReminderDetail mocks
-    AlertReminderDetail alertReminderDetail1 = new AlertReminderDetail();
-    alertReminderDetail1.setCreationDate(LocalDateTime.now().minusHours(1));
-    
-    AlertReminderDetail alertReminderDetail2 = new AlertReminderDetail();
-    alertReminderDetail2.setCreationDate(LocalDateTime.now());
-    
-    // Mock the getAlertReminderDetail method calls
-    given(dpwEventHelper.getAlertReminderDetail(eq(alertEntity)))
-        .willReturn(alertReminderDetail1);
-    
-    given(dpwEventHelper.getAlertReminderDetail(eq(reminderEntity), eq(bnppuid)))
-        .willReturn(alertReminderDetail2);
-    
-    // Execute the method
-    TreeviewAlertReminderPage actual = service.getAlertReminderForTreeViewByEventId(
-        branchCode, 0, 10, bnppuid, eventId);
-    
-    // Assertions
-    assertEquals(2, actual.getResults().size());
-}
+import static org.assertj.core.api.Assertions.assertThat;
 
-// CORRECTED IMPLEMENTATION
-@Override
-public TreeviewAlertReminderPage getAlertReminderForTreeViewByEventId(
-    String branchCode, Integer skip, Integer take, String bnppuid, String eventId) {
-    
-    log.info("Fetching Alert & Reminder for treeview, eventId: {}, branchCode: {}", eventId, branchCode);
-    
-    int pageSkip = skip / take;
-    Pageable pageable = PageRequest.of(pageSkip, take);
-    
-    List<AlertReminderDetail> alertReminderDetails;
-    
-    try {
-        CompletableFuture<List<AlertReminderDetail>> alertReminderDetailsCompletableFuture = 
-            CompletableFuture.completedFuture(new ArrayList<AlertReminderDetail>())
-            .thenCombine(dpwEventHelper.getEventAlertsFuture(eventId), 
-                (alertReminderDetailList, alertEntities) -> {
-                    alertReminderDetailList.addAll(
-                        alertEntities.stream()
-                            .map(alertEntity -> dpwEventHelper.getAlertReminderDetail(alertEntity))
-                            .collect(Collectors.toList())
-                    );
-                    return alertReminderDetailList;
-                })
-            .thenCombine(dpwEventHelper.getEventReminderFuture(eventId), 
-                (alertReminderDetailList, reminderEntities) -> {
-                    alertReminderDetailList.addAll(
-                        reminderEntities.stream()
-                            .map(reminderEntity -> dpwEventHelper.getAlertReminderDetail(reminderEntity, bnppuid))
-                            .collect(Collectors.toList())
-                    );
-                    return alertReminderDetailList;
-                })
-            .thenApply(alertReminderDetailList -> 
-                alertReminderDetailList.stream()
-                    .sorted(Comparator.comparing(AlertReminderDetail::getCreationDate))
-                    .collect(Collectors.toList())
-            );
-        
-        alertReminderDetails = alertReminderDetailsCompletableFuture.join();
-        
-        final int start = (int) pageable.getOffset();
-        final int end = Math.min((start + pageable.getPageSize()), alertReminderDetails.size());
-        
-        Page<AlertReminderDetail> alertReminderDetailPage = new PageImpl<>(
-            alertReminderDetails.subList(start, end), pageable, alertReminderDetails.size());
-        
-        return getTreeviewAlertReminderPage(alertReminderDetailPage);
-        
-    } catch (Exception ex) {
-        log.error("Exception in [EventServiceImpl] [getAlertReminderForTreeViewByEventId], message: {}, eventId: {}, branchCode: {}, bnppuid: {}", 
-            ex.getMessage(), eventId, branchCode, bnppuid);
-        throw new DpwException("Error fetching Alert & Reminder for treeview, eventId: " + eventId, ex);
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.Test;
+
+import java.time.LocalDateTime;
+import java.util.Map;
+
+public class RequestBuilderServiceTest {
+
+    private final RequestBuilderService service = new RequestBuilderService();
+
+    @Test
+    void testBuildRequest_success() throws JsonProcessingException {
+        // Arrange
+        SwiftData swiftData = new SwiftData();
+        swiftData.setCustomerName("John Doe");
+        swiftData.setCustomerId("CUST123");
+        swiftData.setAmount("1000.00");
+        swiftData.setCurrency("USD");
+        swiftData.setMfrorUmfr("HFR001");
+        swiftData.setProductGroup("Trade");
+        swiftData.setProduct("Letter of Credit");
+        swiftData.setCorrespondentRef("REF987");
+        swiftData.setCustomerCategory("CORP");
+        swiftData.setDivisionName("Division A");
+        swiftData.setSubDivisionName("SubDivision A1");
+        swiftData.setSectorName("Banking");
+        swiftData.setBranchCode("BR001");
+        swiftData.setCountryCode("US");
+        swiftData.setProcessingEntity("EntityX");
+        swiftData.setBusinessCenter("Center1");
+        swiftData.setMessageType("MT103");
+        swiftData.setSenderRequestNumber("REQ001");
+        swiftData.setBranchName("Main Branch");
+        swiftData.setSenderBic("BICCODE123");
+
+        // Act
+        RequestExtended result = service.buildRequest(swiftData);
+
+        // Assert
+        assertThat(result.getCusName()).isEqualTo("John Doe");
+        assertThat(result.getCustMstNo()).isEqualTo("CUST123");
+        assertThat(result.getAmount()).isEqualTo("1000.00");
+        assertThat(result.getCurCode()).isEqualTo("USD");
+        assertThat(result.getHfr()).isEqualTo("HFR001");
+        assertThat(result.getCorrespondentReference()).isEqualTo("REF987");
+
+        Map<String, String> map = new ObjectMapper().readValue(result.getSerializedObject(), Map.class);
+        assertThat(map.get(CommonConstants.PRODUCT_GROUP_NAME)).isEqualTo("Trade");
+        assertThat(map.get(CommonConstants.PRODUCT_NAME)).isEqualTo("Letter of Credit");
+        assertThat(map.get(CommonConstants.CORRESPONDENT_REFERENCE)).isEqualTo("REF987");
+        assertThat(map.get(CommonConstants.EVENT_PRIORITY)).isEqualTo("2");
+        assertThat(map.get(CommonConstants.CUSTOMER_CATEGORY)).isEqualTo("CORP");
+
+        assertThat(result.getDivisionName()).isEqualTo("Division A");
+        assertThat(result.getSubDivisionName()).isEqualTo("SubDivision A1");
+        assertThat(result.getSectorName()).isEqualTo("Banking");
+        assertThat(result.getBranchCode()).isEqualTo("BR001");
+        assertThat(result.getCountryCode()).isEqualTo("US");
+        assertThat(result.getProcessingEntityName()).isEqualTo("EntityX");
+        assertThat(result.getBusinessCenter()).isEqualTo("Center1");
+        assertThat(result.getChannelName()).isEqualTo(CommonConstants.CHANNEL_SWIFT);
+        assertThat(result.getMessageTypeId()).isEqualTo("MT103");
+        assertThat(result.getSenderRequestNumber()).isEqualTo("REQ001");
+        assertThat(result.getBranchName()).isEqualTo("Main Branch");
+        assertThat(result.getSenderBicCode()).isEqualTo("BICCODE123");
+        assertThat(result.getStatus()).isEqualTo(CommonConstants.QUALIFICATION_STATUS);
+        assertThat(result.getSystemCreationDate()).isNotNull();
+        assertThat(result.getRequestCreationDateTime()).isNotNull();
     }
 }
