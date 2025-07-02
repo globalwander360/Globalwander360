@@ -1,73 +1,30 @@
-import static org.assertj.core.api.Assertions.assertThat;
+@Test
+void createRequest_ShouldHandleNormalAndFallbackFlow() {
+    // Arrange
+    Request incomingRequest = new Request();
+    incomingRequest.setChannelName("UV");  // Set channel to UV for fallback scenario
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.Test;
+    Request expectedRequest = new Request();
+    expectedRequest.setId("R1");
 
-import java.time.LocalDateTime;
-import java.util.Map;
+    // Simulate fallback scenario
+    when(requestService.createRequest("bnppuid1", incomingRequest, null, null, "30004", "FR", null))
+        .thenThrow(new RuntimeException("Status and Workflow Mismatch"));
 
-public class RequestBuilderServiceTest {
+    when(requestService.createRequestInCaseOfFallback("bnppuid1", incomingRequest, "30004"))
+        .thenReturn(expectedRequest);
 
-    private final RequestBuilderService service = new RequestBuilderService();
+    // Act
+    ResponseEntity<Request> requestResponseEntity = requestController.createRequest(
+        "30004", "FR", "bnppuid1", null, null, null, incomingRequest
+    );
 
-    @Test
-    void testBuildRequest_success() throws JsonProcessingException {
-        // Arrange
-        SwiftData swiftData = new SwiftData();
-        swiftData.setCustomerName("John Doe");
-        swiftData.setCustomerId("CUST123");
-        swiftData.setAmount("1000.00");
-        swiftData.setCurrency("USD");
-        swiftData.setMfrorUmfr("HFR001");
-        swiftData.setProductGroup("Trade");
-        swiftData.setProduct("Letter of Credit");
-        swiftData.setCorrespondentRef("REF987");
-        swiftData.setCustomerCategory("CORP");
-        swiftData.setDivisionName("Division A");
-        swiftData.setSubDivisionName("SubDivision A1");
-        swiftData.setSectorName("Banking");
-        swiftData.setBranchCode("BR001");
-        swiftData.setCountryCode("US");
-        swiftData.setProcessingEntity("EntityX");
-        swiftData.setBusinessCenter("Center1");
-        swiftData.setMessageType("MT103");
-        swiftData.setSenderRequestNumber("REQ001");
-        swiftData.setBranchName("Main Branch");
-        swiftData.setSenderBic("BICCODE123");
+    // Assert
+    Request resultRequest = requestResponseEntity.getBody();
+    assertNotNull(resultRequest);
+    assertEquals(expectedRequest, resultRequest);
 
-        // Act
-        RequestExtended result = service.buildRequest(swiftData);
-
-        // Assert
-        assertThat(result.getCusName()).isEqualTo("John Doe");
-        assertThat(result.getCustMstNo()).isEqualTo("CUST123");
-        assertThat(result.getAmount()).isEqualTo("1000.00");
-        assertThat(result.getCurCode()).isEqualTo("USD");
-        assertThat(result.getHfr()).isEqualTo("HFR001");
-        assertThat(result.getCorrespondentReference()).isEqualTo("REF987");
-
-        Map<String, String> map = new ObjectMapper().readValue(result.getSerializedObject(), Map.class);
-        assertThat(map.get(CommonConstants.PRODUCT_GROUP_NAME)).isEqualTo("Trade");
-        assertThat(map.get(CommonConstants.PRODUCT_NAME)).isEqualTo("Letter of Credit");
-        assertThat(map.get(CommonConstants.CORRESPONDENT_REFERENCE)).isEqualTo("REF987");
-        assertThat(map.get(CommonConstants.EVENT_PRIORITY)).isEqualTo("2");
-        assertThat(map.get(CommonConstants.CUSTOMER_CATEGORY)).isEqualTo("CORP");
-
-        assertThat(result.getDivisionName()).isEqualTo("Division A");
-        assertThat(result.getSubDivisionName()).isEqualTo("SubDivision A1");
-        assertThat(result.getSectorName()).isEqualTo("Banking");
-        assertThat(result.getBranchCode()).isEqualTo("BR001");
-        assertThat(result.getCountryCode()).isEqualTo("US");
-        assertThat(result.getProcessingEntityName()).isEqualTo("EntityX");
-        assertThat(result.getBusinessCenter()).isEqualTo("Center1");
-        assertThat(result.getChannelName()).isEqualTo(CommonConstants.CHANNEL_SWIFT);
-        assertThat(result.getMessageTypeId()).isEqualTo("MT103");
-        assertThat(result.getSenderRequestNumber()).isEqualTo("REQ001");
-        assertThat(result.getBranchName()).isEqualTo("Main Branch");
-        assertThat(result.getSenderBicCode()).isEqualTo("BICCODE123");
-        assertThat(result.getStatus()).isEqualTo(CommonConstants.QUALIFICATION_STATUS);
-        assertThat(result.getSystemCreationDate()).isNotNull();
-        assertThat(result.getRequestCreationDateTime()).isNotNull();
-    }
+    // Verify both methods
+    verify(requestService, times(1)).createRequest("bnppuid1", incomingRequest, null, null, "30004", "FR", null);
+    verify(requestService, times(1)).createRequestInCaseOfFallback("bnppuid1", incomingRequest, "30004");
 }
