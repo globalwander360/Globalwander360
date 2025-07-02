@@ -1,31 +1,26 @@
-@ExtendWith(MockitoExtension.class)
-class RequestServiceImplTest {
+@Test
+public void getPropertyIdNames_ShouldReturnMapWithValidProperties() {
+    // Arrange
+    String bnppuid = "e12928";
 
-    @Mock
-    private ReferentialUtil referentialUtil;
+    TransactionalProperty prop1 = new TransactionalProperty();
+    prop1.setId("P1");
+    prop1.setPropertyName("C1");
 
-    @InjectMocks
-    private RequestServiceImpl requestService; // <- directly test implementation
+    TransactionalProperty prop2 = new TransactionalProperty();
+    prop2.setId("P2");
+    prop2.setPropertyName("C2");
 
-    @Test
-    public void getPropertyIdNames_ShouldReturnMapWithValidProperties() {
-        String bnppuid = "e12928";
+    List<TransactionalProperty> mockList = Arrays.asList(prop1, prop2);
 
-        TransactionalProperty prop1 = new TransactionalProperty();
-        prop1.setId("P1");
-        prop1.setPropertyName("C1");
+    when(referentialUtil.getCompletionMotiveList(bnppuid)).thenReturn(mockList);
 
-        TransactionalProperty prop2 = new TransactionalProperty();
-        prop2.setId("P2");
-        prop2.setPropertyName("C2");
+    // Act
+    Map<String, String> result = requestService.getPropertyIdNames(bnppuid);
 
-        List<TransactionalProperty> mockList = Arrays.asList(prop1, prop2);
-        when(referentialUtil.getCompletionMotiveList(bnppuid)).thenReturn(mockList);
-
-        Map<String, String> result = requestService.getPropertyIdNames(bnppuid);
-
-        assertEquals(2, result.size());
-        assertEquals("C1", result.get("P1"));
-        assertEquals("C2", result.get("P2"));
-    }
+    // Assert
+    assertNotNull(result);
+    assertEquals(2, result.size());
+    assertEquals("C1", result.get("P1"));
+    assertEquals("C2", result.get("P2"));
 }
