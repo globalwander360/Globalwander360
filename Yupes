@@ -1,59 +1,21 @@
 @Test
-void createRequest_ShouldHandleNormalAndFallbackFlow() {
+void getPropertyNamesByEventIdAndType_ShouldReturnValidList() {
     // Arrange
-    Request incomingRequest = new Request();
-    incomingRequest.setChannelName("UV");  // Set channel to UV for fallback scenario
+    String eventId = "EVT123";
+    String propertyType = "STATUS";
 
-    Request expectedRequest = new Request();
-    expectedRequest.setId("R1");
+    List<Long> mockIds = Arrays.asList(1L, 2L, 3L);
 
-    // Simulate fallback scenario
-    when(requestService.createRequest("bnppuid1", incomingRequest, null, null, "30004", "FR", null))
-        .thenThrow(new RuntimeException("Status and Workflow Mismatch"));
-
-    when(requestService.createRequestInCaseOfFallback("bnppuid1", incomingRequest, "30004"))
-        .thenReturn(expectedRequest);
+    when(transactionPropertiesRepository.getPropertyNamesByEventIdAndType(eventId, propertyType))
+        .thenReturn(mockIds);
 
     // Act
-    ResponseEntity<Request> requestResponseEntity = requestController.createRequest(
-        "30004", "FR", "bnppuid1", null, null, null, incomingRequest
-    );
+    List<Long> result = requestService.getPropertyNamesByEventIdAndType(eventId, propertyType);
 
     // Assert
-    Request resultRequest = requestResponseEntity.getBody();
-    assertNotNull(resultRequest);
-    assertEquals(expectedRequest, resultRequest);
-
-    // Verify both methods
-    verify(requestService, times(1)).createRequest("bnppuid1", incomingRequest, null, null, "30004", "FR", null);
-    verify(requestService, times(1)).createRequestInCaseOfFallback("bnppuid1", incomingRequest, "30004");
+    assertNotNull(result);
+    assertEquals(3, result.size());
+    assertEquals(Long.valueOf(1), result.get(0));
+    assertEquals(Long.valueOf(2), result.get(1));
+    assertEquals(Long.valueOf(3), result.get(2));
 }
-
-
-
-@Test
-void getPropertyIdNames_ShouldReturnMapWithValidProperties() {
-    // Arrange
-    String bnppuid = "user123";
-
-    TransactionalProperty prop1 = new TransactionalProperty();
-    prop1.setId("P1");
-    prop1.setPropertyName("Close");
-
-    TransactionalProperty prop2 = new TransactionalProperty();
-    prop2.setId("P2");
-    prop2.setPropertyName("Reject");
-
-    List<TransactionalProperty> mockList = Arrays.asList(prop1, prop2);
-
-    when(referentialUtil.getCompletionMotiveList(bnppuid)).thenReturn(mockList);
-
-    // Act
-    Map<String, String> result = requestService.getPropertyIdNames(bnppuid);
-
-    // Assert
-    assertEquals(2, result.size());
-    assertEquals("Close", result.get("P1"));
-    assertEquals("Reject", result.get("P2"));
-}
-
