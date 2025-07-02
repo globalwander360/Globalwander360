@@ -28,3 +28,32 @@ void createRequest_ShouldHandleNormalAndFallbackFlow() {
     verify(requestService, times(1)).createRequest("bnppuid1", incomingRequest, null, null, "30004", "FR", null);
     verify(requestService, times(1)).createRequestInCaseOfFallback("bnppuid1", incomingRequest, "30004");
 }
+
+
+
+@Test
+void getPropertyIdNames_ShouldReturnMapWithValidProperties() {
+    // Arrange
+    String bnppuid = "user123";
+
+    TransactionalProperty prop1 = new TransactionalProperty();
+    prop1.setId("P1");
+    prop1.setPropertyName("Close");
+
+    TransactionalProperty prop2 = new TransactionalProperty();
+    prop2.setId("P2");
+    prop2.setPropertyName("Reject");
+
+    List<TransactionalProperty> mockList = Arrays.asList(prop1, prop2);
+
+    when(referentialUtil.getCompletionMotiveList(bnppuid)).thenReturn(mockList);
+
+    // Act
+    Map<String, String> result = requestService.getPropertyIdNames(bnppuid);
+
+    // Assert
+    assertEquals(2, result.size());
+    assertEquals("Close", result.get("P1"));
+    assertEquals("Reject", result.get("P2"));
+}
+
