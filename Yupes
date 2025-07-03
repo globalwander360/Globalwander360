@@ -1,26 +1,23 @@
 @Test
-public void testGetBranches_ExceptionThrown() {
+public void shouldReturnEmptyList_WhenBranchApiThrowsException() {
     String bnppuid = "e12928";
     String branchCode = "FR001";
     String countryCode = "FR";
 
-    // Mock the API call to throw an exception
     when(branchApi.searchBranch(
         eq(bnppuid), 
-        isNull(), // name
-        isNull(), // state
-        isNull(), // processing
+        isNull(),
+        isNull(),
+        isNull(),
         eq(branchCode),
         eq(countryCode),
-        isNull(), // page
-        isNull(), // limit
-        isNull(), // sort
-        isNull()  // _order
+        isNull(),
+        isNull(),
+        isNull(),
+        isNull()
     )).thenThrow(new RuntimeException("API error"));
 
-    // Call method
     List<Branch> result = requestServiceImpl.getBranches(bnppuid, branchCode, countryCode);
 
-    // Verify it returns an empty list
     Assertions.assertEquals(Collections.emptyList(), result);
 }
