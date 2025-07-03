@@ -26,3 +26,22 @@ public void testGetPropertyIdNames_AllScenarios() {
 
     assertEquals(expected, result);
 }
+
+
+
+@Test
+public void testGetBranches_ExceptionThrown() {
+    String bnppuid = "123";
+    String branchCode = "BR01";
+    String countryCode = "IN";
+
+    when(branchApi.searchBranch(
+        eq(bnppuid), any(), any(), any(),
+        eq(branchCode), eq(countryCode),
+        any(), any(), any(), any()
+    )).thenThrow(new RuntimeException("API error"));
+
+    List<Branch> result = yourService.getBranches(bnppuid, branchCode, countryCode);
+
+    assertEquals(Collections.emptyList(), result); // returns List.of()
+}
