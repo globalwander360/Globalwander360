@@ -1,132 +1,98 @@
-@Test
-public void testGetPropertyNames_Success() {
-    String eventid = "evt123";
-    Map<String, String> propertyIdNameMap = new HashMap<>();
-    propertyIdNameMap.put("1", "Name1");
-    propertyIdNameMap.put("2", "Name2");
+@ExtendWith(MockitoExtension.class)
+class MyServiceTest {
 
-    List<Long> mockPropertyIds = Arrays.asList(1L, 2L, 3L); // 3L is not in map
+    @InjectMocks
+    private MyService myService;
 
-    when(transactionPropertyService.getPropertyNamesByEventidAndType(eventid, "COMPLETION_MOTIVE"))
-        .thenReturn(mockPropertyIds);
+    @Mock
+    private BranchApi branchApi;
 
-    String result = yourService.getPropertyNames(eventid, propertyIdNameMap);
+    @Test
+    void testGetPropertyNames_withValidData_shouldReturnJoinedNames() {
+        String eventId = "E1";
+        Map<String, String> propertyIdNameMap = new HashMap<>();
+        propertyIdNameMap.put("101", "Reason1");
+        propertyIdNameMap.put("102", "Reason2");
 
-    assertEquals("Name1,Name2", result);
-}
+        List<Long> mockPropertyIds = List.of(101L, 102L);
 
+        // Spy to override protected/private or stub method in same class
+        MyService spyService = Mockito.spy(myService);
+        Mockito.doReturn(mockPropertyIds).when(spyService).getPropertyNamesByEventIdAndType(eventId, "COMPLETION_MOTIVE");
 
-@Test
-public void testGetPropertyNames_EmptyAfterFiltering() {
-    String eventid = "evt456";
-    Map<String, String> propertyIdNameMap = new HashMap<>(); // no valid entries
+        String result = spyService.getPropertyNames(eventId, propertyIdNameMap);
+        assertEquals("Reason1,Reason2", result);
+    }
 
-    List<Long> mockPropertyIds = Arrays.asList(10L, 20L);
+    @Test
+    void testGetPropertyNames_withEmptyList_shouldReturnNull() {
+        String eventId = "E2";
+        Map<String, String> propertyIdNameMap = new HashMap<>();
 
-    when(transactionPropertyService.getPropertyNamesByEventidAndType(eventid, "COMPLETION_MOTIVE"))
-        .thenReturn(mockPropertyIds);
+        // Spy and mock method
+        MyService spyService = Mockito.spy(myService);
+        Mockito.doReturn(Collections.emptyList()).when(spyService).getPropertyNamesByEventIdAndType(eventId, "COMPLETION_MOTIVE");
 
-    String result = yourService.getPropertyNames(eventid, propertyIdNameMap);
+        String result = spyService.getPropertyNames(eventId, propertyIdNameMap);
+        assertNull(result);
+    }
 
-    assertNull(result);
-}
-@Test
-public void testGetPropertyNames_ExceptionThrown() {
-    String eventid = "evt789";
-    Map<String, String> propertyIdNameMap = new HashMap<>();
+    @Test
+    void testGetPropertyNames_withMissingMapEntries_shouldSkipNulls() {
+        String eventId = "E3";
+        Map<String, String> propertyIdNameMap = new HashMap<>();
+        propertyIdNameMap.put("101", "Reason1"); // 102 is missing
 
-    when(transactionPropertyService.getPropertyNamesByEventidAndType(eventid, "COMPLETION_MOTIVE"))
-        .thenThrow(new RuntimeException("Service error"));
+        List<Long> mockPropertyIds = List.of(101L, 102L);
 
-    String result = yourService.getPropertyNames(eventid, propertyIdNameMap);
+        MyService spyService = Mockito.spy(myService);
+        Mockito.doReturn(mockPropertyIds).when(spyService).getPropertyNamesByEventIdAndType(eventId, "COMPLETION_MOTIVE");
 
-    assertNull(result);
-}
+        String result = spyService.getPropertyNames(eventId, propertyIdNameMap);
+        assertEquals("Reason1", result);
+    }
 
-@Test
-public void testExportEvents_WithValidPropertyNames() {
-    String bnppuid = "user123";
-    String eventId = "101";
+    @Test
+    void testGetPropertyNames_whenExceptionOccurs_shouldReturnNull() {
+        String eventId = "E4";
+        Map<String, String> propertyIdNameMap = new HashMap<>();
 
-    // Mock input event
-    EventExportDTO mockDto = new EventExportDTO();
-    mockDto.setId(eventId);
+        MyService spyService = Mockito.spy(myService);
+        Mockito.doThrow(new RuntimeException("DB error"))
+               .when(spyService).getPropertyNamesByEventIdAndType(eventId, "COMPLETION_MOTIVE");
 
-    List<EventExportDTO> eventList = List.of(mockDto);
+        String result = spyService.getPropertyNames(eventId, propertyIdNameMap);
+        assertNull(result);
+    }
 
-    // Mock map returned by service method
-    Map<String, String> propertyIdNameMap = new HashMap<>();
-    propertyIdNameMap.put("1", "Name1");
-    propertyIdNameMap.put("2", "Name2");
+    @Test
+    void testGetBranches_validResponse() {
+        String bnppuid = "user123";
+        String branchCode = "B1";
+        String countryCode = "IN";
 
-    // Stub method
-    when(requestServiceImpl.getPropertyIdNames(bnppuid)).thenReturn(propertyIdNameMap);
-    when(yourService.getPropertyNames(eventId, propertyIdNameMap)).thenReturn("Name1,Name2");
+        Branch branch = new Branch();
+        List<Branch> expectedBranches = List.of(branch);
 
-    // Mock event list page and mapping
-    EventListsPage mockPage = mock(EventListsPage.class);
-    when(mockPage.getResults()).thenReturn(List.of(new EventEntity()));
+        Mockito.when(branchApi.searchBranch(bnppuid, null, null, null, branchCode, countryCode,
+                                            null, null, null, null))
+               .thenReturn(expectedBranches);
 
-    when(eventService.filterEvents(any(), any(), eq(bnppuid), eq(true), any(), any(), any(), any()))
-        .thenReturn(mockPage);
-    when(eventMapper.mapToEventExportDTOList(any())).thenReturn(eventList);
+        List<Branch> result = myService.getBranches(bnppuid, branchCode, countryCode);
+        assertEquals(1, result.size());
+    }
 
-    // Call the method under test
-    ResponseEntity<?> response = yourService.exportEvents(...); // pass required args
+    @Test
+    void testGetBranches_whenExceptionOccurs_shouldReturnEmptyList() {
+        String bnppuid = "user456";
+        String branchCode = "B2";
+        String countryCode = "US";
 
-    // Assertions
-    assertEquals(HttpStatus.OK, response.getStatusCode());
-    assertEquals("Name1,Name2", mockDto.getTransactionPropertyName());
-}
+        Mockito.when(branchApi.searchBranch(bnppuid, null, null, null, branchCode, countryCode,
+                                            null, null, null, null))
+               .thenThrow(new RuntimeException("API failure"));
 
-
-@Test
-public void testExportIntradayEvents_Success() throws Exception {
-    String bnppuid = "user123";
-    String branchCode = "BR01";
-    String countryCode = "IN";
-    String timezone = "Asia/Kolkata";
-
-    ExportRequest export = mock(ExportRequest.class);
-    when(export.getColumns()).thenReturn(List.of("col1", "col2"));
-    when(export.getPgpeCodes()).thenReturn(List.of("PG1"));
-    when(export.getExcelHeaders()).thenReturn(List.of("Header1", "Header2"));
-
-    // Mock propertyIdNameMap
-    Map<String, String> propertyIdNameMap = new HashMap<>();
-    propertyIdNameMap.put("1", "PropName1");
-    when(requestServiceImpl.getPropertyIdNames(bnppuid)).thenReturn(propertyIdNameMap);
-
-    // Mock event entity
-    EventEntity eventEntity = new EventEntity();
-    EventListsPage eventListsPage = mock(EventListsPage.class);
-    when(eventListsPage.getResults()).thenReturn(List.of(eventEntity));
-    when(eventListsPage.getExcelCount()).thenReturn(1);
-
-    when(eventService.filterEvents(any(), any(), eq(bnppuid), eq(true), any(), eq(branchCode), eq(countryCode), any()))
-        .thenReturn(eventListsPage);
-
-    // Mock DTO
-    EventExportDTO dto = new EventExportDTO();
-    dto.setId("1");
-    dto.setCusBusinessCenterId("C1");
-    dto.setBranchCode("B1");
-
-    when(eventMapper.mapToEventExportDtoList(any())).thenReturn(List.of(dto));
-    when(yourService.getPropertyNames("1", propertyIdNameMap)).thenReturn("PropName1");
-
-    // Mock CSV export
-    ByteArrayOutputStream bos = new ByteArrayOutputStream();
-    CsvExportHelper<EventExportDTO> csvHelper = mock(CsvExportHelper.class);
-    when(csvHelper.createFileContent(1)).thenReturn(bos);
-    when(csvHelper.generateMultipleHeaders(bos)).thenReturn(new HttpHeaders());
-
-    when(csvExportHelperFactory.createHelper(any(), any(), any(), any())).thenReturn(csvHelper);
-    when(eventService.getIntradayReportSequence()).thenReturn(BigInteger.valueOf(12345));
-
-    // Call actual method
-    ResponseEntity<byte[]> response = yourService.exportIntradayEvents(export, bnppuid, branchCode, countryCode, timezone);
-
-    assertEquals(HttpStatus.OK, response.getStatusCode());
-    assertNotNull(response.getBody());
+        List<Branch> result = myService.getBranches(bnppuid, branchCode, countryCode);
+        assertTrue(result.isEmpty());
+    }
 }
