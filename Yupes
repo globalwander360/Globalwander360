@@ -1,110 +1,85 @@
-@Test
-public void shouldReturnExcelFile_WhenExportEventsIsSuccessful() throws Exception {
-    String branchCode = "BR001";
-    String bnppuid = "e12928";
-    String countryCode = "FR";
-    String acceptLanguage = "en";
-    String q = "filter";
-    Integer skip = 0;
-    Integer take = 10;
-    String orderBy = "date";
-    SortDirection direction = SortDirection.ASC;
-    String timezone = "UTC";
-    Export export = new Export();
-    export.setPgpeCodes(List.of("PG1"));
-    export.setColumns(List.of("column1"));
-    export.setExcelHeaders(List.of("Header1"));
+@ExtendWith(MockitoExtension.class)
+public class TransactionPropertyServiceImplTest {
 
-    List<DpwEvent> events = List.of(new DpwEvent());
-    Page<DpwEvent> page = new PageImpl<>(events);
-    EventListsPage eventListsPage = new EventListsPage();
-    eventListsPage.setResults(events);
-    eventListsPage.setExcelCount(1);
+    @InjectMocks
+    private TransactionPropertyServiceImpl transactionPropertyServiceImpl;
 
-    List<DpwEventExportDTO> exportDTOList = List.of(new DpwEventExportDTO());
+    @Mock
+    private SomeDependencyService mockDependencyService; // Replace with actual class used for getPropertyNamesByEventIdAndType
 
-    when(eventService.filterEvents(anyString(), any(), anyString(), anyBoolean(), any(), anyString(), anyString(), any()))
-        .thenReturn(eventListsPage);
+    @Test
+    public void testGetPropertyNames_AllValidProperties() {
+        String eventId = "evt123";
+        Map<String, String> propertyIdNameMap = new HashMap<>();
+        propertyIdNameMap.put("1", "C1");
+        propertyIdNameMap.put("2", "C2");
 
-    when(eventMapper.mapToEventExportDtoList(anyList())).thenReturn(exportDTOList);
-    when(requestServiceImpl.getPropertyIdNames(anyString())).thenReturn(Map.of());
-    when(transactionPropertyService.getPropertyNames(any(), any())).thenReturn("Property Name");
+        List<Long> mockPropertyIds = Arrays.asList(1L, 2L);
 
-    ByteArrayOutputStream bos = new ByteArrayOutputStream();
-    bos.write("Excel Data".getBytes());
+        Mockito.when(mockDependencyService.getPropertyNamesByEventIdAndType(eventId, "COMPLETION_MOTIVE"))
+               .thenReturn(mockPropertyIds);
 
-    ExcelExportHelper<DpwEventExportDTO> helper = mock(ExcelExportHelper.class);
-    when(helper.createFileContent(anyInt())).thenReturn(bos);
-    when(helper.generateHttpHeaders(any())).thenReturn(new HttpHeaders());
+        // Inject behavior if needed or make method public for test
+        String result = transactionPropertyServiceImpl.getPropertyNames(eventId, propertyIdNameMap);
 
-    try (MockedConstruction<ExcelExportHelper> mocked = mockConstruction(ExcelExportHelper.class,
-        (mock, context) -> {
-            when(mock.createFileContent(anyInt())).thenReturn(bos);
-            when(mock.generateHttpHeaders(any())).thenReturn(new HttpHeaders());
-        })) {
+        Assertions.assertEquals("C1,C2", result);
+    }
 
-        ResponseEntity<byte[]> response = requestController.exportEvents(
-            branchCode, bnppuid, countryCode, acceptLanguage, q, skip, take, orderBy,
-            direction, timezone, export
-        );
+    @Test
+    public void testGetPropertyNames_PartiallyValidProperties() {
+        String eventId = "evt456";
+        Map<String, String> propertyIdNameMap = new HashMap<>();
+        propertyIdNameMap.put("1", "C1");
+        propertyIdNameMap.put("3", null);  // null should be ignored
 
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertNotNull(response.getBody());
+        List<Long> mockPropertyIds = Arrays.asList(1L, 3L);
+
+        Mockito.when(mockDependencyService.getPropertyNamesByEventIdAndType(eventId, "COMPLETION_MOTIVE"))
+               .thenReturn(mockPropertyIds);
+
+        String result = transactionPropertyServiceImpl.getPropertyNames(eventId, propertyIdNameMap);
+
+        Assertions.assertEquals("C1", result);  // Only one valid name
+    }
+
+    @Test
+    public void testGetPropertyNames_EmptyAfterFiltering() {
+        String eventId = "evtEmpty";
+        Map<String, String> propertyIdNameMap = new HashMap<>();  // no valid mapping
+
+        List<Long> mockPropertyIds = Arrays.asList(10L, 20L);
+
+        Mockito.when(mockDependencyService.getPropertyNamesByEventIdAndType(eventId, "COMPLETION_MOTIVE"))
+               .thenReturn(mockPropertyIds);
+
+        String result = transactionPropertyServiceImpl.getPropertyNames(eventId, propertyIdNameMap);
+
+        Assertions.assertNull(result);
+    }
+
+    @Test
+    public void testGetPropertyNames_ExceptionThrown() {
+        String eventId = "evtError";
+        Map<String, String> propertyIdNameMap = new HashMap<>();
+
+        Mockito.when(mockDependencyService.getPropertyNamesByEventIdAndType(eventId, "COMPLETION_MOTIVE"))
+               .thenThrow(new RuntimeException("Service error"));
+
+        String result = transactionPropertyServiceImpl.getPropertyNames(eventId, propertyIdNameMap);
+
+        Assertions.assertNull(result);
+    }
+
+    @Test
+    public void testGetPropertyNames_EmptyPropertyIdsList() {
+        String eventId = "evtEmptyList";
+        Map<String, String> propertyIdNameMap = new HashMap<>();
+
+        Mockito.when(mockDependencyService.getPropertyNamesByEventIdAndType(eventId, "COMPLETION_MOTIVE"))
+               .thenReturn(Collections.emptyList());
+
+        String result = transactionPropertyServiceImpl.getPropertyNames(eventId, propertyIdNameMap);
+
+        Assertions.assertNull(result);
     }
 }
-
-@Test
-public void shouldReturnInternalServerError_WhenFilterEventsFails() {
-    String branchCode = "BR001";
-    String bnppuid = "e12928";
-    String countryCode = "FR";
-    Export export = new Export();
-    export.setPgpeCodes(List.of("PG1"));
-    export.setColumns(List.of("col1"));
-
-    when(eventService.filterEvents(any(), any(), any(), anyBoolean(), any(), any(), any(), any()))
-        .thenThrow(new RuntimeException("Filter Failed"));
-
-    ResponseEntity<byte[]> response = requestController.exportEvents(
-        branchCode, bnppuid, countryCode, null, null, 0, 10, null,
-        SortDirection.ASC, "UTC", export
-    );
-
-    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-}
-
-@Test
-public void shouldReturnInternalServerError_WhenExcelExportFails() throws Exception {
-    String branchCode = "BR001";
-    String bnppuid = "e12928";
-    String countryCode = "FR";
-    Export export = new Export();
-    export.setPgpeCodes(List.of("PG1"));
-    export.setColumns(List.of("column1"));
-    export.setExcelHeaders(List.of("Header1"));
-
-    List<DpwEvent> events = List.of(new DpwEvent());
-    EventListsPage eventListsPage = new EventListsPage();
-    eventListsPage.setResults(events);
-    eventListsPage.setExcelCount(1);
-
-    when(eventService.filterEvents(any(), any(), any(), anyBoolean(), any(), any(), any(), any()))
-        .thenReturn(eventListsPage);
-    when(eventMapper.mapToEventExportDtoList(any())).thenReturn(List.of(new DpwEventExportDTO()));
-    when(requestServiceImpl.getPropertyIdNames(anyString())).thenReturn(Map.of());
-    when(transactionPropertyService.getPropertyNames(any(), any())).thenReturn("Property");
-
-    try (MockedConstruction<ExcelExportHelper> mocked = mockConstruction(ExcelExportHelper.class,
-        (mock, context) -> {
-            when(mock.createFileContent(anyInt())).thenThrow(new IOException("IO fail"));
-        })) {
-
-        ResponseEntity<byte[]> response = requestController.exportEvents(
-            branchCode, bnppuid, countryCode, null, null, 0, 10, null,
-            SortDirection.ASC, "UTC", export
-        );
-
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-    }
-}
-
