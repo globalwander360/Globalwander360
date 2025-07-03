@@ -78,3 +78,55 @@ public void testExportEvents_WithValidPropertyNames() {
     assertEquals(HttpStatus.OK, response.getStatusCode());
     assertEquals("Name1,Name2", mockDto.getTransactionPropertyName());
 }
+
+
+@Test
+public void testExportIntradayEvents_Success() throws Exception {
+    String bnppuid = "user123";
+    String branchCode = "BR01";
+    String countryCode = "IN";
+    String timezone = "Asia/Kolkata";
+
+    ExportRequest export = mock(ExportRequest.class);
+    when(export.getColumns()).thenReturn(List.of("col1", "col2"));
+    when(export.getPgpeCodes()).thenReturn(List.of("PG1"));
+    when(export.getExcelHeaders()).thenReturn(List.of("Header1", "Header2"));
+
+    // Mock propertyIdNameMap
+    Map<String, String> propertyIdNameMap = new HashMap<>();
+    propertyIdNameMap.put("1", "PropName1");
+    when(requestServiceImpl.getPropertyIdNames(bnppuid)).thenReturn(propertyIdNameMap);
+
+    // Mock event entity
+    EventEntity eventEntity = new EventEntity();
+    EventListsPage eventListsPage = mock(EventListsPage.class);
+    when(eventListsPage.getResults()).thenReturn(List.of(eventEntity));
+    when(eventListsPage.getExcelCount()).thenReturn(1);
+
+    when(eventService.filterEvents(any(), any(), eq(bnppuid), eq(true), any(), eq(branchCode), eq(countryCode), any()))
+        .thenReturn(eventListsPage);
+
+    // Mock DTO
+    EventExportDTO dto = new EventExportDTO();
+    dto.setId("1");
+    dto.setCusBusinessCenterId("C1");
+    dto.setBranchCode("B1");
+
+    when(eventMapper.mapToEventExportDtoList(any())).thenReturn(List.of(dto));
+    when(yourService.getPropertyNames("1", propertyIdNameMap)).thenReturn("PropName1");
+
+    // Mock CSV export
+    ByteArrayOutputStream bos = new ByteArrayOutputStream();
+    CsvExportHelper<EventExportDTO> csvHelper = mock(CsvExportHelper.class);
+    when(csvHelper.createFileContent(1)).thenReturn(bos);
+    when(csvHelper.generateMultipleHeaders(bos)).thenReturn(new HttpHeaders());
+
+    when(csvExportHelperFactory.createHelper(any(), any(), any(), any())).thenReturn(csvHelper);
+    when(eventService.getIntradayReportSequence()).thenReturn(BigInteger.valueOf(12345));
+
+    // Call actual method
+    ResponseEntity<byte[]> response = yourService.exportIntradayEvents(export, bnppuid, branchCode, countryCode, timezone);
+
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+    assertNotNull(response.getBody());
+}
