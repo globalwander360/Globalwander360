@@ -42,3 +42,39 @@ public void testGetPropertyNames_ExceptionThrown() {
 
     assertNull(result);
 }
+
+@Test
+public void testExportEvents_WithValidPropertyNames() {
+    String bnppuid = "user123";
+    String eventId = "101";
+
+    // Mock input event
+    EventExportDTO mockDto = new EventExportDTO();
+    mockDto.setId(eventId);
+
+    List<EventExportDTO> eventList = List.of(mockDto);
+
+    // Mock map returned by service method
+    Map<String, String> propertyIdNameMap = new HashMap<>();
+    propertyIdNameMap.put("1", "Name1");
+    propertyIdNameMap.put("2", "Name2");
+
+    // Stub method
+    when(requestServiceImpl.getPropertyIdNames(bnppuid)).thenReturn(propertyIdNameMap);
+    when(yourService.getPropertyNames(eventId, propertyIdNameMap)).thenReturn("Name1,Name2");
+
+    // Mock event list page and mapping
+    EventListsPage mockPage = mock(EventListsPage.class);
+    when(mockPage.getResults()).thenReturn(List.of(new EventEntity()));
+
+    when(eventService.filterEvents(any(), any(), eq(bnppuid), eq(true), any(), any(), any(), any()))
+        .thenReturn(mockPage);
+    when(eventMapper.mapToEventExportDTOList(any())).thenReturn(eventList);
+
+    // Call the method under test
+    ResponseEntity<?> response = yourService.exportEvents(...); // pass required args
+
+    // Assertions
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+    assertEquals("Name1,Name2", mockDto.getTransactionPropertyName());
+}
