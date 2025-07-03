@@ -1,47 +1,44 @@
 @Test
-public void testGetPropertyIdNames_AllScenarios() {
-    String bnppuid = "user123";
+public void testGetPropertyNames_Success() {
+    String eventid = "evt123";
+    Map<String, String> propertyIdNameMap = new HashMap<>();
+    propertyIdNameMap.put("1", "Name1");
+    propertyIdNameMap.put("2", "Name2");
 
-    TransactionalProperty prop1 = new TransactionalProperty();
-    prop1.setId("P1");
-    prop1.setPropertyName("Name1");
+    List<Long> mockPropertyIds = Arrays.asList(1L, 2L, 3L); // 3L is not in map
 
-    TransactionalProperty prop2 = new TransactionalProperty();
-    prop2.setId("P2");
-    prop2.setPropertyName(null);  // should be filtered out
+    when(transactionPropertyService.getPropertyNamesByEventidAndType(eventid, "COMPLETION_MOTIVE"))
+        .thenReturn(mockPropertyIds);
 
-    TransactionalProperty prop3 = new TransactionalProperty();
-    prop3.setId("P3");
-    prop3.setPropertyName("Name3");
+    String result = yourService.getPropertyNames(eventid, propertyIdNameMap);
 
-    List<TransactionalProperty> mockList = Arrays.asList(prop1, prop2, prop3);
-
-    when(referentialUtil.getCompletionMotiveList(bnppuid)).thenReturn(mockList);
-
-    Map<String, String> result = yourService.getPropertyIdNames(bnppuid);
-
-    Map<String, String> expected = new HashMap<>();
-    expected.put("P1", "Name1");
-    expected.put("P3", "Name3");
-
-    assertEquals(expected, result);
+    assertEquals("Name1,Name2", result);
 }
 
 
-
 @Test
-public void testGetBranches_ExceptionThrown() {
-    String bnppuid = "123";
-    String branchCode = "BR01";
-    String countryCode = "IN";
+public void testGetPropertyNames_EmptyAfterFiltering() {
+    String eventid = "evt456";
+    Map<String, String> propertyIdNameMap = new HashMap<>(); // no valid entries
 
-    when(branchApi.searchBranch(
-        eq(bnppuid), any(), any(), any(),
-        eq(branchCode), eq(countryCode),
-        any(), any(), any(), any()
-    )).thenThrow(new RuntimeException("API error"));
+    List<Long> mockPropertyIds = Arrays.asList(10L, 20L);
 
-    List<Branch> result = yourService.getBranches(bnppuid, branchCode, countryCode);
+    when(transactionPropertyService.getPropertyNamesByEventidAndType(eventid, "COMPLETION_MOTIVE"))
+        .thenReturn(mockPropertyIds);
 
-    assertEquals(Collections.emptyList(), result); // returns List.of()
+    String result = yourService.getPropertyNames(eventid, propertyIdNameMap);
+
+    assertNull(result);
+}
+@Test
+public void testGetPropertyNames_ExceptionThrown() {
+    String eventid = "evt789";
+    Map<String, String> propertyIdNameMap = new HashMap<>();
+
+    when(transactionPropertyService.getPropertyNamesByEventidAndType(eventid, "COMPLETION_MOTIVE"))
+        .thenThrow(new RuntimeException("Service error"));
+
+    String result = yourService.getPropertyNames(eventid, propertyIdNameMap);
+
+    assertNull(result);
 }
