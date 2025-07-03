@@ -1,98 +1,26 @@
-@ExtendWith(MockitoExtension.class)
-class MyServiceTest {
+@Test
+public void testGetBranches_ExceptionThrown() {
+    String bnppuid = "e12928";
+    String branchCode = "FR001";
+    String countryCode = "FR";
 
-    @InjectMocks
-    private MyService myService;
+    // Mock the API call to throw an exception
+    when(branchApi.searchBranch(
+        eq(bnppuid), 
+        isNull(), // name
+        isNull(), // state
+        isNull(), // processing
+        eq(branchCode),
+        eq(countryCode),
+        isNull(), // page
+        isNull(), // limit
+        isNull(), // sort
+        isNull()  // _order
+    )).thenThrow(new RuntimeException("API error"));
 
-    @Mock
-    private BranchApi branchApi;
+    // Call method
+    List<Branch> result = requestServiceImpl.getBranches(bnppuid, branchCode, countryCode);
 
-    @Test
-    void testGetPropertyNames_withValidData_shouldReturnJoinedNames() {
-        String eventId = "E1";
-        Map<String, String> propertyIdNameMap = new HashMap<>();
-        propertyIdNameMap.put("101", "Reason1");
-        propertyIdNameMap.put("102", "Reason2");
-
-        List<Long> mockPropertyIds = List.of(101L, 102L);
-
-        // Spy to override protected/private or stub method in same class
-        MyService spyService = Mockito.spy(myService);
-        Mockito.doReturn(mockPropertyIds).when(spyService).getPropertyNamesByEventIdAndType(eventId, "COMPLETION_MOTIVE");
-
-        String result = spyService.getPropertyNames(eventId, propertyIdNameMap);
-        assertEquals("Reason1,Reason2", result);
-    }
-
-    @Test
-    void testGetPropertyNames_withEmptyList_shouldReturnNull() {
-        String eventId = "E2";
-        Map<String, String> propertyIdNameMap = new HashMap<>();
-
-        // Spy and mock method
-        MyService spyService = Mockito.spy(myService);
-        Mockito.doReturn(Collections.emptyList()).when(spyService).getPropertyNamesByEventIdAndType(eventId, "COMPLETION_MOTIVE");
-
-        String result = spyService.getPropertyNames(eventId, propertyIdNameMap);
-        assertNull(result);
-    }
-
-    @Test
-    void testGetPropertyNames_withMissingMapEntries_shouldSkipNulls() {
-        String eventId = "E3";
-        Map<String, String> propertyIdNameMap = new HashMap<>();
-        propertyIdNameMap.put("101", "Reason1"); // 102 is missing
-
-        List<Long> mockPropertyIds = List.of(101L, 102L);
-
-        MyService spyService = Mockito.spy(myService);
-        Mockito.doReturn(mockPropertyIds).when(spyService).getPropertyNamesByEventIdAndType(eventId, "COMPLETION_MOTIVE");
-
-        String result = spyService.getPropertyNames(eventId, propertyIdNameMap);
-        assertEquals("Reason1", result);
-    }
-
-    @Test
-    void testGetPropertyNames_whenExceptionOccurs_shouldReturnNull() {
-        String eventId = "E4";
-        Map<String, String> propertyIdNameMap = new HashMap<>();
-
-        MyService spyService = Mockito.spy(myService);
-        Mockito.doThrow(new RuntimeException("DB error"))
-               .when(spyService).getPropertyNamesByEventIdAndType(eventId, "COMPLETION_MOTIVE");
-
-        String result = spyService.getPropertyNames(eventId, propertyIdNameMap);
-        assertNull(result);
-    }
-
-    @Test
-    void testGetBranches_validResponse() {
-        String bnppuid = "user123";
-        String branchCode = "B1";
-        String countryCode = "IN";
-
-        Branch branch = new Branch();
-        List<Branch> expectedBranches = List.of(branch);
-
-        Mockito.when(branchApi.searchBranch(bnppuid, null, null, null, branchCode, countryCode,
-                                            null, null, null, null))
-               .thenReturn(expectedBranches);
-
-        List<Branch> result = myService.getBranches(bnppuid, branchCode, countryCode);
-        assertEquals(1, result.size());
-    }
-
-    @Test
-    void testGetBranches_whenExceptionOccurs_shouldReturnEmptyList() {
-        String bnppuid = "user456";
-        String branchCode = "B2";
-        String countryCode = "US";
-
-        Mockito.when(branchApi.searchBranch(bnppuid, null, null, null, branchCode, countryCode,
-                                            null, null, null, null))
-               .thenThrow(new RuntimeException("API failure"));
-
-        List<Branch> result = myService.getBranches(bnppuid, branchCode, countryCode);
-        assertTrue(result.isEmpty());
-    }
+    // Verify it returns an empty list
+    Assertions.assertEquals(Collections.emptyList(), result);
 }
