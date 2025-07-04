@@ -1,146 +1,26 @@
-
-
-Method 1: testGetPropertyNamesByEventIdAndType()
-
 @Test
-public void testGetPropertyNamesByEventIdAndType() {
-    String eventId = "event123";
-    String propertyType = "COMPLETION_MOTIVE";
+void testSetProcessingEntityWithValidBranch() {
+    Branch branch = new Branch();
+    Processing processing = new Processing();
+    processing.setName("OPS");
+    branch.setProcessing(processing);
 
-    List<Long> nonEmptyList = Arrays.asList(1L, 2L, 3L);
-    List<Long> emptyList = Collections.emptyList();
+    YourService spyService = Mockito.spy(yourService);
+    Mockito.doReturn(List.of(branch)).when(spyService).getBranches("uid", "code", "country");
 
-    when(transactionPropertiesRepository.getIDByEventIdAndPropertyType(eventId, propertyType))
-            .thenReturn(nonEmptyList)
-            .thenReturn(emptyList);
+    spyService.setProcessingEntity("uid", "code", "country", request);
 
-    List<Long> result1 = service.getPropertyNamesByEventIdAndType(eventId, propertyType);
-    assertEquals(nonEmptyList, result1);
-    assertEquals(3, result1.size());
-
-    List<Long> result2 = service.getPropertyNamesByEventIdAndType(eventId, propertyType);
-    assertTrue(result2.isEmpty());
-    assertSame(Collections.emptyList(), result2);
+    Mockito.verify(request).setProcessingEntityName("OPS");
 }
 
 
----
-
-Method 2: testGetPropertyNames()
-
 @Test
-public void testGetPropertyNames() {
-    String eventId = "event123";
+void testGetBranchesHandlesException() {
+    Mockito.when(branchApi.searchBranch(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(),
+            Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any()))
+           .thenThrow(new RuntimeException("Test Exception"));
 
-    // 1. Multiple Valid Mappings
-    List<Long> ids1 = Arrays.asList(1L, 2L, 3L);
-    Map<String, String> map1 = new HashMap<>();
-    map1.put("1", "Property1");
-    map1.put("2", "Property2");
-    map1.put("3", "Property3");
+    List<Branch> result = yourService.getBranches("uid", "code", "country");
 
-    when(transactionPropertiesRepository.getIDByEventIdAndPropertyType(eventId, "COMPLETION_MOTIVE"))
-            .thenReturn(ids1);
-    String result1 = service.getPropertyNames(eventId, map1);
-    assertEquals("Property1,Property2,Property3", result1);
-
-    // 2. Single Valid Mapping
-    List<Long> ids2 = Arrays.asList(1L);
-    Map<String, String> map2 = Map.of("1", "Property1");
-    when(transactionPropertiesRepository.getIDByEventIdAndPropertyType(eventId, "COMPLETION_MOTIVE"))
-            .thenReturn(ids2);
-    String result2 = service.getPropertyNames(eventId, map2);
-    assertEquals("Property1", result2);
-
-    // 3. Partial Valid Mappings
-    List<Long> ids3 = Arrays.asList(1L, 2L, 3L, 4L);
-    Map<String, String> map3 = new HashMap<>();
-    map3.put("1", "Property1");
-    map3.put("3", "Property3");
-    when(transactionPropertiesRepository.getIDByEventIdAndPropertyType(eventId, "COMPLETION_MOTIVE"))
-            .thenReturn(ids3);
-    String result3 = service.getPropertyNames(eventId, map3);
-    assertEquals("Property1,Property3", result3);
-
-    // 4. Empty Property IDs
-    Map<String, String> map4 = Map.of("1", "Property1");
-    when(transactionPropertiesRepository.getIDByEventIdAndPropertyType(eventId, "COMPLETION_MOTIVE"))
-            .thenReturn(Collections.emptyList());
-    String result4 = service.getPropertyNames(eventId, map4);
-    assertNull(result4);
-
-    // 5. No Matching Names
-    List<Long> ids5 = Arrays.asList(1L, 2L, 3L);
-    Map<String, String> map5 = Map.of("4", "Property4", "5", "Property5");
-    when(transactionPropertiesRepository.getIDByEventIdAndPropertyType(eventId, "COMPLETION_MOTIVE"))
-            .thenReturn(ids5);
-    String result5 = service.getPropertyNames(eventId, map5);
-    assertNull(result5);
-
-    // 6. Null Values in Map
-    List<Long> ids6 = Arrays.asList(1L, 2L, 3L);
-    Map<String, String> map6 = new HashMap<>();
-    map6.put("1", "Property1");
-    map6.put("2", null);
-    map6.put("3", "Property3");
-    when(transactionPropertiesRepository.getIDByEventIdAndPropertyType(eventId, "COMPLETION_MOTIVE"))
-            .thenReturn(ids6);
-    String result6 = service.getPropertyNames(eventId, map6);
-    assertEquals("Property1,Property3", result6);
-
-    // 7. Exception: Runtime
-    when(transactionPropertiesRepository.getIDByEventIdAndPropertyType(eventId, "COMPLETION_MOTIVE"))
-            .thenThrow(new RuntimeException("DB error"));
-    String result7 = service.getPropertyNames(eventId, new HashMap<>());
-    assertNull(result7);
-
-    // 8. Exception: NullPointer
-    when(transactionPropertiesRepository.getIDByEventIdAndPropertyType(eventId, "COMPLETION_MOTIVE"))
-            .thenThrow(new NullPointerException("null"));
-    String result8 = service.getPropertyNames(eventId, new HashMap<>());
-    assertNull(result8);
-
-    // 9. Exception: IllegalArgument
-    when(transactionPropertiesRepository.getIDByEventIdAndPropertyType(eventId, "COMPLETION_MOTIVE"))
-            .thenThrow(new IllegalArgumentException("invalid"));
-    String result9 = service.getPropertyNames(eventId, new HashMap<>());
-    assertNull(result9);
-
-    // 10. Exception during stream map.get()
-    List<Long> ids10 = Arrays.asList(1L, 2L, 3L);
-    Map<String, String> faultyMap = new HashMap<>() {
-        @Override
-        public String get(Object key) {
-            if ("2".equals(key)) throw new RuntimeException("Map get failed");
-            return super.get(key);
-        }
-    };
-    faultyMap.put("1", "Property1");
-    faultyMap.put("3", "Property3");
-    when(transactionPropertiesRepository.getIDByEventIdAndPropertyType(eventId, "COMPLETION_MOTIVE"))
-            .thenReturn(ids10);
-    String result10 = service.getPropertyNames(eventId, faultyMap);
-    assertNull(result10);
-
-    // 11. Empty Map
-    List<Long> ids11 = Arrays.asList(1L, 2L, 3L);
-    when(transactionPropertiesRepository.getIDByEventIdAndPropertyType(eventId, "COMPLETION_MOTIVE"))
-            .thenReturn(ids11);
-    String result11 = service.getPropertyNames(eventId, new HashMap<>());
-    assertNull(result11);
-
-    // 12. Empty String in Map
-    List<Long> ids12 = Arrays.asList(1L, 2L);
-    Map<String, String> map12 = new HashMap<>();
-    map12.put("1", "");
-    map12.put("2", "Property2");
-    when(transactionPropertiesRepository.getIDByEventIdAndPropertyType(eventId, "COMPLETION_MOTIVE"))
-            .thenReturn(ids12);
-    String result12 = service.getPropertyNames(eventId, map12);
-    assertEquals(",Property2", result12);
+    Assertions.assertTrue(result.isEmpty());
 }
-
-
----
-
-These two methods comprehensively test both your methods with 100% coverage, including happy paths, edge cases, and exception scenarios.
